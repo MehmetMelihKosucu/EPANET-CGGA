@@ -7,7 +7,7 @@ Comprehensive Gradient Global Algorithm Extension of the EPANET
 
 
 ## Building
-To build, use CMake on Windows with Visual Studio (tested with Visual Studio 2013 and validated with 2019):
+To build, use CMake on Windows with Visual Studio:
 ```
 mkdir build && cd build
 cmake -G "Visual Studio n yyyy" ..
