@@ -138,7 +138,6 @@ CGGASolver::~CGGASolver() {
 //=============================================================================
 // CGGA SOLVER 
 //=============================================================================
-
 int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
 
     trials = 1;
@@ -156,6 +155,10 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
     if (currentTime >= simulationEndTime - 1e-10) {
         network->msgLog << "\nSimulation reached end time";
         return HydSolver::SUCCESSFUL;
+    }
+
+	if (currentTime == 10.0) {
+        network->msgLog << "\n[DEBUG] Reached t=10s - this is a good point to check initial behavior.";
     }
 
     // ========================================================================
@@ -186,6 +189,33 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
         }
         else if (currentMode == RWC) {
             forcedRWCSteps = forcedRWCSteps0;
+
+            if (oldMode == WATER_HAMMER) {
+                network->msgLog << "\n  Pre-converging heads via QS for WH->RWC transition";
+                int initTrials = 1;
+                executeQuasiSteadySolve(0, initTrials, currentTime);
+                network->msgLog << "\n  QS initialization complete (" << initTrials << " trials)";
+
+                // Sync past values to match the QS-converged state.
+                // This ensures the RWC momentum residual is zero at the first
+                // Newton iteration: LI*(Q - Q_past)/Dt + hLoss - DH = 0
+                // because Q = Q_past and H1-H2 = hLoss(Q).
+                for (Node* node : network->nodes) {
+                    if (!node) continue;
+                    node->pastHead = node->head;
+                }
+                for (Link* link : network->links) {
+                    if (!link) continue;
+                    link->pastFlow = link->flow;
+                    link->pastHloss = link->hLoss;
+                    Pipe* pipe = dynamic_cast<Pipe*>(link);
+                    if (pipe) {
+                        pipe->pastStartFlow = pipe->startFlow;
+                        pipe->pastEndFlow = pipe->endFlow;
+                    }
+                }
+                network->msgLog << "\n  Past values synced to QS state";
+            }
         }
     }
 
@@ -202,7 +232,7 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
         currentMode = QUASI_STEADY;
         simulationPhase = FRONT_END;
         whLockedOut = false;
-		rwcLockedOut = false;
+        rwcLockedOut = false;
         pendingModeChange = false;
 
         tstep = computeTimeStepForMode(QUASI_STEADY, currentTime, simulationEndTime);
@@ -224,7 +254,6 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
     //=========================================================================
 
     if (!isIntegerSecond) {
-        // Continue with current mode, no indicator computation or mode evaluation
 
         if (currentMode == WATER_HAMMER) {
             tstep = computeTimeStepForMode(WATER_HAMMER, currentTime, simulationEndTime);
@@ -236,7 +265,7 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
             result = executeRWCSolve(tstep, trials, currentTime);
             tstep_ = tstep;
         }
-        else {  // QUASI_STEADY
+        else {
             tstep = computeTimeStepForMode(QUASI_STEADY, currentTime, simulationEndTime);
             result = executeQuasiSteadySolve(tstep, trials, currentTime);
             tstep_ = tstep;
@@ -315,11 +344,42 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
             network->msgLog << "\n  phiA=" << maxPhiA << ", phiR=" << maxPhiR;
         }
         else {
-            // Indicators still low, stay in MIDWAY but continue QS for now
-            tstep_ = tstep;
+            // Indicators still low — but check valve setting rate before
+            // defaulting to QS. A rapid valve closure (rate > 0.09/s) needs
+            // RWC's 1-second evaluation cadence to catch the developing transient.
+            bool rapidValveChange = false;
+            for (Link* link : network->links) {
+                if (link->type() == Link::VALVE) {
+                    Valve* valve = static_cast<Valve*>(link);
+                    double currentSetting = valve->setting;
+                    double previousSetting = valve->pastSetting;
+                    double dt = (previousTimestep > 0.0) ? previousTimestep : 1.0;
+                    double rate = std::abs(currentSetting - previousSetting) / dt;
+                    if (rate > 0.009) {
+                        rapidValveChange = true;
+                        network->msgLog << "\n  Rapid valve closure detected for valve "
+                            << valve->name << ": rate=" << rate << "/s";
+                        break;
+                    }
+                }
+            }
 
-            network->msgLog << "\n  Indicators still low -> continuing QS in MIDWAY";
-            network->msgLog << "\n  phiA=" << maxPhiA << ", phiR=" << maxPhiR;
+            if (rapidValveChange) {
+                // Fast closure — use RWC for frequent indicator evaluation
+                network->msgLog << "\n  Indicators low but rapid valve change -> scheduling RWC";
+                network->msgLog << "\n  phiA=" << maxPhiA << ", phiR=" << maxPhiR;
+
+                pendingModeChange = true;
+                pendingMode = RWC;
+                tstep_ = computeTimeStepForMode(RWC, currentTime + tstep, simulationEndTime);
+            }
+            else {
+                // Slow event — QS is fine
+                tstep_ = tstep;
+
+                network->msgLog << "\n  Indicators still low -> continuing QS in MIDWAY";
+                network->msgLog << "\n  phiA=" << maxPhiA << ", phiR=" << maxPhiR;
+            }
         }
 
         return result;
@@ -340,14 +400,15 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
             result = executeWaterHammerSolve(tstep, trials, currentTime);
             if (result != HydSolver::SUCCESSFUL) return result;
 
-            // Compute indicators at integer second
+            // Compute indicators from WH solution (physically accurate).
+            // After this: prevSecondState = t-1, currentSecondState = WH(t)
             computeFlowIndicators(currentTime, tstep);
             forcedWHSteps--;
 
-            // Check for WH -> RWC transition
+            // Check for WH -> RWC transition (only outside hydraulic event)
             bool belowDynamic = (maxPhiA < phiA_D) || (maxPhiR < phiR_D);
 
-            if (belowDynamic && forcedWHSteps <= 0) {
+            if (belowDynamic && forcedWHSteps <= 0 && !eventOngoing) {
 
                 network->msgLog << "\n==================================================";
                 network->msgLog << "\n  [t=" << currentTime << "] Scheduling WH->RWC for next timestep";
@@ -355,12 +416,10 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
                 network->msgLog << "\n  WH now LOCKED OUT (ratchet-down active)";
                 network->msgLog << "\n==================================================";
 
-                // Schedule RWC for next timestep
                 pendingModeChange = true;
                 pendingMode = RWC;
                 whLockedOut = true;
 
-                // Return RWC timestep for next iteration
                 tstep_ = computeTimeStepForMode(RWC, currentTime + tstep, simulationEndTime);
             }
             else {
@@ -369,6 +428,10 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
                 if (belowDynamic && forcedWHSteps > 0) {
                     network->msgLog << "\n  [WH] Indicators low but " << forcedWHSteps
                         << " forced steps remain";
+                }
+                if (belowDynamic && forcedWHSteps <= 0 && eventOngoing) {
+                    network->msgLog << "\n  [WH] Indicators low but event ongoing"
+                        << " - no de-escalation allowed";
                 }
             }
 
@@ -427,7 +490,6 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
                 pendingModeChange = true;
                 pendingMode = QUASI_STEADY;
                 simulationPhase = BACK_END;
-                whLockedOut = false;
                 rwcLockedOut = true;
 
                 // Return QS timestep for next iteration
@@ -494,7 +556,6 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
                 network->msgLog << "\n  [t=" << currentTime << "] QS->BACK-END (event complete, indicators low)";
 
                 simulationPhase = BACK_END;
-                whLockedOut = false;
                 tstep_ = tstep;
             }
             else {
@@ -546,6 +607,61 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
     return result;
 }
 
+void CGGASolver::saveStateForRedo()
+{
+    // Resize on first call
+    if (redoNodeHeads.size() != nodeCount) {
+        redoNodeHeads.resize(nodeCount, 0.0);
+        redoLinkFlows.resize(linkCount, 0.0);
+        redoPipeStartFlows.resize(linkCount, 0.0);
+        redoPipeEndFlows.resize(linkCount, 0.0);
+    }
+
+    // Save node heads
+    for (Node* node : network->nodes) {
+        if (node && node->index >= 0 && node->index < nodeCount) {
+            redoNodeHeads[node->index] = node->head;
+        }
+    }
+
+    // Save link flows (including pipe start/end)
+    for (Link* link : network->links) {
+        int idx = link->index;
+        if (idx < 0 || idx >= linkCount) continue;
+
+        redoLinkFlows[idx] = link->flow;
+
+        Pipe* pipe = dynamic_cast<Pipe*>(link);
+        if (pipe) {
+            redoPipeStartFlows[idx] = pipe->startFlow;
+            redoPipeEndFlows[idx] = pipe->endFlow;
+        }
+    }
+}
+
+void CGGASolver::restoreStateForRedo()
+{
+    // Restore node heads
+    for (Node* node : network->nodes) {
+        if (node && node->index >= 0 && node->index < nodeCount) {
+            node->head = redoNodeHeads[node->index];
+        }
+    }
+
+    // Restore link flows
+    for (Link* link : network->links) {
+        int idx = link->index;
+        if (idx < 0 || idx >= linkCount) continue;
+
+        link->flow = redoLinkFlows[idx];
+
+        Pipe* pipe = dynamic_cast<Pipe*>(link);
+        if (pipe) {
+            pipe->startFlow = redoPipeStartFlows[idx];
+            pipe->endFlow = redoPipeEndFlows[idx];
+        }
+    }
+}
 
 const char* CGGASolver::getModeString(SolverMode mode) {
     switch (mode) {
@@ -1567,6 +1683,8 @@ int CGGASolver::executeWaterHammerSolve(double dt, int& trials, double currentTi
     double prevErrorNorm = HUGE_VAL;
     double dl = 1.0;
 
+	minErrorNorm = HUGE_VAL;
+
     const int maxIterations = 33;
     int iterations = 0;
 
@@ -1594,31 +1712,96 @@ int CGGASolver::executeWaterHammerSolve(double dt, int& trials, double currentTi
         }
 
         findUnsteadyFlowChanges(currentMode, currentTime);
-    
-        // Step sizing with line search
-        if (stepSizing == ARF) {
-            lambda = 1.0;
-            double trialError = calculateTrialError(lambda, currentTime, dt);
 
-            if (trialError < prevErrorNorm * 0.99) {
+        if (stepSizing == ARF) {
+
+            // STEP 1: Try λ=1 first (ARF optimization per Yan et al.)
+            // State is still at H^(k-1) after solve. findUnsteadyErrorNorm evaluates
+            // at H^(k-1) + λ·dH internally without modifying state.
+            lambda = 1.0;
+            double trialError = findUnsteadyErrorNorm(1.0, currentTime, dt);
+
+            if (trialError < prevErrorNorm) {
+                // λ=1 reduces error → accept
                 errorNorm = trialError;
-                restoreIterationState();
-                updateWHSolution(lambda);
+                updateWHSolution(1.0);  // Permanently apply
             }
             else {
-                while (minErrorNorm >= prevErrorNorm * 0.99 && dl > 0.001) {
-                    dl *= 0.25;
-                    lambda = findUnsteadyStepSize(iterations, currentTime, dt, prevErrorNorm, dl);
+                // STEP 2: λ=1 failed → enumerate λ values (recursive tracking)
+                double bestLambda = 1.0;
+                double bestError = trialError;
+                double searchDl = 0.5;  // Initial step size (configurable, paper recommends 0.5 for efficiency)
+                bool found = false;
+
+                while (!found && searchDl >= 0.001) {
+                    int nSamples = std::max(2, (int)(1.0 / searchDl));
+
+                    for (int j = 0; j < nSamples; j++) {
+                        double testLambda = (j + 1) * searchDl;
+                        if (testLambda > 1.0) testLambda = 1.0;
+
+                        // Evaluate at H^(k-1) + testLambda·dH — NO state modification
+                        double testError = findUnsteadyErrorNorm(testLambda, currentTime, dt);
+
+                        if (testError < bestError) {
+                            bestError = testError;
+                            bestLambda = testLambda;
+                        }
+                    }
+
+                    if (bestError < prevErrorNorm) {
+                        found = true;  // Accept λ_best
+                    }
+                    else {
+                        searchDl *= 0.25;  // Recursive tracking: refine Δλ
+                    }
                 }
-                errorNorm = minErrorNorm;
+
+                errorNorm = bestError;
+                updateWHSolution(bestLambda);  // Permanently apply the best λ
             }
         }
         else if (stepSizing == BRF) {
-            while (minErrorNorm >= prevErrorNorm && dl > 0.001) {
-                dl *= 0.25;
-                lambda = findUnsteadyStepSize(iterations, currentTime, dt, prevErrorNorm, dl);
+            // === Best-ever Relaxation Factor (Yan et al. 2019, Section 2.2.2) ===
+            // Always enumerate the full (0,1] interval.  Find the lambda that
+            // yields the minimum convergence tracker, then accept if < prev.
+            double bestLambda = 1.0;
+            double bestError = HUGE_VAL;
+            double searchDl = 0.5;   // Initial step size
+            bool   found = false;
+
+            while (!found && searchDl >= 0.001) {
+                int nSamples = std::max(2, (int)(1.0 / searchDl));
+
+                for (int j = 0; j < nSamples; j++) {
+                    double testLambda = (j + 1) * searchDl;
+                    if (testLambda > 1.0) testLambda = 1.0;
+
+                    // Evaluate at H^(k-1) + testLambda * dH  -- no state modification
+                    double testError = findUnsteadyErrorNorm(testLambda, currentTime, dt);
+
+                    if (testError < bestError) {
+                        bestError = testError;
+                        bestLambda = testLambda;
+                    }
+                }
+
+                if (bestError < prevErrorNorm) {
+                    found = true;
+                }
+                else {
+                    searchDl *= 0.25;   // Recursive tracking: refine delta-lambda
+                }
             }
-            errorNorm = minErrorNorm;
+
+            errorNorm = bestError;
+            updateWHSolution(bestLambda);   // Single permanent application
+            lambda = bestLambda;
+
+            if (reportTrials) {
+                network->msgLog << "\n    BRF: selected lambda=" << bestLambda
+                    << " error=" << bestError;
+            }
         }
         else {
             errorNorm = findUnsteadyErrorNorm(1.0, currentTime, dt);
@@ -1754,12 +1937,10 @@ double CGGASolver::findUnsteadyStepSize(int trials, double currentTime, double t
         
         // Test each lambda value
         for (int i = 0; i < lambdaCount; i++) {
-            // Restore to the state before any updates
-            restoreState();
             
             // Apply this lambda and calculate error
             double testLambda = lambdaValues[i];
-            updateWHSolution(testLambda);
+            //updateWHSolution(testLambda);
             double testError = findUnsteadyErrorNorm(1.0, currentTime, tstep);
             
             // Track the best lambda
@@ -2243,7 +2424,7 @@ void CGGASolver::setUnsteadyNodeCoeffs(double currentTime)
                 double pastOutflow = -(1.0 - theta) * node->pastOutflow / theta;
                 matrixSolver->addToDiag(i, node->qGrad);
                 matrixSolver->addToRhs(i, node->qGrad * node->head);
-                matrixSolver->addToRhs(i, pastOutflow);
+                //matrixSolver->addToRhs(i, pastOutflow);
             }
 
             // ... add node's net inflow to r.h.s. row
@@ -2849,7 +3030,7 @@ void CGGASolver::updateWHSolution(double lamda) {
     if (tstep < initialStepsCount) {
         // Start with heavier relaxation, gradually increasing to full strength
         relaxationFactor = 0.3 + 0.7 * (tstep / (double)initialStepsCount);
-        network->msgLog << "\nApplying relaxation factor: " << relaxationFactor;
+        //network->msgLog << "\nApplying relaxation factor: " << relaxationFactor;
         lamda *= 1.0; // relaxationFactor;
     }
     
@@ -2948,9 +3129,9 @@ void CGGASolver::updateWHSolution(double lamda) {
     }
     
     // Log solution update metrics
-    network->msgLog << "\nSolution update metrics:"
+    /*network->msgLog << "\nSolution update metrics:"
                    << "\n  Max head change: " << maxHeadChange
-                   << "\n  Max flow change: " << maxFlowChange;
+                   << "\n  Max flow change: " << maxFlowChange; // */
 }
 
 // Dynamically check for link status changes
