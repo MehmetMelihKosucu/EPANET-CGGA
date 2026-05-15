@@ -98,6 +98,21 @@ The `Networks/` directory contains reference benchmark cases:
 | EPANET 3 native integration | ✅ | wraps EPANET externally | wraps EPANET externally | manual | import path |
 | Cost to user | Free | Free | Free | License fee | License fee |
 
+## Citation
+
+**Software**:
+
+```bibtex
+@software{Kosucu2026EPANETCGGAcode,
+  author    = {Ko{\c{s}}ucu, Mehmet Melih},
+  title     = {EPANET-CGGA: Adaptive Hybrid Hydraulic Solver},
+  year      = {2026},
+  publisher = {Zenodo},
+  version   = {v1.0.0},
+  doi       = {10.5281/zenodo.20199101},
+  url       = {https://github.com/MehmetMelihKosucu/EPANET-CGGA}
+}
+```
 
 ## References
 
