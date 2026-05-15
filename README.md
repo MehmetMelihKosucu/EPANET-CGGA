@@ -104,11 +104,11 @@ The `Networks/` directory contains reference benchmark cases:
 
 The CGGA framework and its three-mode reduction are described in:
 
-- Nault, J. D., & Karney, B. W. (2020). Comprehensive adaptive modelling of 1-D unsteady pipe network hydraulics. *Journal of Hydraulic Research*, 59(2), 263–279.
-- Nault, J. D., Karney, B. W., & Jung, B. S. (2018). Algebraic Water Hammer (AWH) method.
+- Nault, J.D., Karney, B.W., 2020. Comprehensive adaptive modelling of 1-D unsteady pipe network hydraulics. Journal of Hydraulic Research 59, 263–279. https://doi.org/10.1080/00221686.2020.1770878.
+- Nault, J.D., Karney, B.W., Jung, B., 2016. Algebraic Water Hammer: Global Formulation for Simulating Transient Pipe Network Hydraulics, in: World Environmental and Water Resources Congress 2016. EWRI, West Palm Beach FL, pp. 191–201.
 - Streeter, V. L., & Wylie, E. B. (1967). *Hydraulic Transients*. McGraw-Hill.
 - Wylie, E. B., & Streeter, V. L. (1993). *Fluid Transients in Systems*. Prentice Hall.
-- Onizuka, K. (1986). System dynamics approach to pipe network analysis.
+- Onizuka, K., 1986. System Dynamics Approach to Pipe Network Analysis. Journal of Hydraulic Engineering 112, 728–749. https://doi.org/10.1061/(asce)0733-9429(1986)112:8(728).
 
 ## Acknowledgments
 
