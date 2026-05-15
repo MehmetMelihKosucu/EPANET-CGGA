@@ -26,9 +26,8 @@ EPANET-CGGA is intended for researchers and practitioners who need transient ana
 
 - **Adaptive hybrid solver** with three coexisting flow regimes in a single simulation run.
 - **Algebraic Water Hammer (AWH)** method treats each pipe as an undiscretized unit, avoiding the segmentation overhead of traditional Method of Characteristics (MOC) implementations.
-- **Object-oriented integration** in the EPANET 3 (`epanet-dev`) codebase, preserving full compatibility with the standard EPANET `.inp` input format.
+- **Object-oriented integration** in the EPANET 3 (`epanet-dev`) codebase, preserving full compatibility with the standard EPANET 3 `.inp` input format.
 - **History-management subsystem** with binary-search interpolation across mode transitions and resolution-aware gap handling.
-- **Numerical stabilization layer** including ARF/BRF adaptive relaxation, tolerance scheduling, and event-driven lockout.
 - **MIT-licensed** open-source release with C++14 compatibility.
 
 ## Repository Structure
