@@ -18,7 +18,7 @@ EPANET-CGGA is a C++ extension of the EPANET 3 hydraulic engine that implements 
 - **Rigid Water Column (RWC)** — inertial unsteady flow neglecting fluid compressibility.
 - **Water Hammer (WH)** — fully compressible unsteady flow via the Algebraic Water Hammer (AWH) method.
 
-Mode selection is driven by physical unsteadiness indicators (φA, φR) evaluated against dynamic and inertial thresholds, with a **redo-based escalation pattern** that probes higher-fidelity solutions when a hydraulic event is detected and a **deferred de-escalation with event-driven lockout** to prevent oscillatory mode switching.
+Mode selection is driven by physical unsteadiness indicators (φA, φR) evaluated against dynamic and inertial thresholds, with a **redo-based escalation pattern** that probes higher accuracy modes when a hydraulic event is detected and a **deferred de-escalation with event-driven lockout** to prevent oscillatory mode switching.
 
 EPANET-CGGA is intended for researchers and practitioners who need transient analysis capability inside an extended-period simulation (EPS) workflow without maintaining separate tools for steady-state and water-hammer analyses.
 
