@@ -104,7 +104,7 @@ The `Networks/` directory contains reference benchmark cases:
 
 ```bibtex
 @software{Kosucu2026EPANETCGGAcode,
-  author    = {Ko{\c{s}}ucu, Mehmet Melih},
+  author    = {Kosucu, Mehmet Melih},
   title     = {EPANET-CGGA: Adaptive Hybrid Hydraulic Solver},
   year      = {2026},
   publisher = {Zenodo},
