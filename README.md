@@ -34,10 +34,24 @@ EPANET-CGGA is intended for researchers and practitioners who need transient ana
 
 ```
 EPANET-CGGA/
-├── src/              # C++14 source code (EPANET 3 base + CGGA extension)
-├── Networks/         # EPANET .inp benchmark networks (Onizuka 1986, Tnet1)
-├── CMakeLists.txt    # CMake build configuration
-├── LICENSE           # MIT License
+├── .github/
+│   └── workflows/
+│       └── ci.yml          # Continuous integration: build and test
+├── Networks/               # EPANET .inp benchmark networks
+├── src/                    # C++14 source (EPANET 3 base + CGGA extension)
+│   ├── Core/               # Engine, hydraulic balance, flow history
+│   ├── Elements/           # Network elements
+│   ├── Input/              # .inp parsers
+│   ├── Models/             # Demand, headloss, leakage models
+│   ├── Output/             # Report and binary output writers
+│   ├── Solvers/            # GGA, RWC-GGA and CGGA solvers
+│   └── Utilities/          # Support utilities
+├── tests/                  # Unit tests for the flow history subsystem
+│   ├── CMakeLists.txt
+│   └── test_flowhistory.cpp
+├── CITATION.cff
+├── CMakeLists.txt
+├── LICENSE
 └── README.md
 ```
 
@@ -118,12 +132,20 @@ Pipe wave celerities (used in the Water Hammer mode) are computed by the `getWav
 
 ## Benchmark Networks
 
-The `Networks/` directory contains reference benchmark cases:
+The `Networks/` directory contains the input files for the case studies
+reported in the accompanying paper, together with a classical reference case:
 
-| Network | Source | Use |
-|---|---|---|
-| `Onizuka1986-EPA3.inp` | Onizuka (1986) | Primary validation: reservoirs, junctions, tank, control valves with gradual closure. |
-| `Tnet1` | Streeter & Wylie (1967) | Secondary validation: classical valve-closure water-hammer reference. |
+| Network | Size | Transient event | Source |
+|---|---|---|---|
+| `Tnet1-EPA3.inp` | 7 junctions, 9 pipes, 1 reservoir, 1 valve | Valve closure at a network boundary (CCV on a 400 mm line) | Streeter & Wylie (1967) |
+| `Onizuka1986-EPA3.inp` | 6 junctions, 9 pipes, 3 reservoirs, 1 tank, 2 valves | Linear valve closure over 100 s, analysed at two tank diameters | Onizuka (1986) |
+| `EPA3-Nault2016.inp` | 34 junctions, 44 pipes, 3 reservoirs, 8 pumps, 1 valve | Pump shutoff and restart in a looped network | Nault & Karney (2016) |
+| `EPA3-hk-burst.inp` | 212 junctions, 231 pipes, 2 reservoirs, 2 valves | Pipe burst at 03:30 within a 24 h extended-period simulation | Hadımköy WDS, Istanbul |
+
+The Hadımköy model includes pressure-dependent leakage. Pipes shorter than the
+Courant-limited minimum length were extended so that a common water hammer time
+step could be applied across the network; this modification is disclosed in the
+accompanying paper.
 
 ## Comparison with Existing Tools
 
