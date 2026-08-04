@@ -20,17 +20,3 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
-
-  linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build
-        run: cmake --build build --config Release
-
-      - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
