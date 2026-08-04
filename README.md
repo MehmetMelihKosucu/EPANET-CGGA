@@ -12,7 +12,7 @@
 
 ## Overview
 
-EPANET-CGGA is a C++ extension of the EPANET 3 hydraulic engine that implements the **Comprehensive Global Gradient Algorithm (CGGA)** of Nault & Karney (2020) within a unified, adaptive hybrid framework. The solver automatically switches between three computational fidelity modes on a per-timestep basis:
+EPANET-CGGA is a C++ extension of the EPANET 3 hydraulic engine that implements the **Comprehensive Global Gradient Algorithm (CGGA)** of Nault & Karney (2020) within a unified, adaptive hybrid framework. The solver automatically switches between three computational modes on a per-timestep basis:
 
 - **Quasi-Steady (QS)** — steady-state hydraulics for slowly varying demand patterns.
 - **Rigid Water Column (RWC)** — inertial unsteady flow neglecting fluid compressibility.
@@ -24,7 +24,7 @@ EPANET-CGGA is intended for researchers and practitioners who need transient ana
 
 ## Key Features
 
-- **Adaptive hybrid solver** with three coexisting flow regimes in a single simulation run.
+- **Adaptive hybrid solver** with three coexisting flow modes in a single simulation run.
 - **Algebraic Water Hammer (AWH)** method treats each pipe as an undiscretized unit, avoiding the segmentation overhead of traditional Method of Characteristics (MOC) implementations.
 - **Object-oriented integration** in the EPANET 3 (`epanet-dev`) codebase, preserving full compatibility with the standard EPANET 3 `.inp` input format.
 - **History-management subsystem** with binary-search interpolation across mode transitions and resolution-aware gap handling.
@@ -57,6 +57,22 @@ Replace `"Visual Studio 17 2022"` with the generator string matching your instal
 
 The build produces the executable in `build/Release/`.
 
+## Tests
+
+The flow history subsystem is verified in isolation by a unit test suite
+under `tests/`. Build with testing enabled and run:
+
+```bash
+cd build
+ctest -C Release
+```
+
+The suite covers circular-buffer construction and capacity, the linear
+interpolation used on the reach-back path, per-pipe history registration,
+and the requirement that a reach-back query which cannot be satisfied from
+stored data reports failure rather than returning extrapolated values.
+Tests run automatically on every commit via GitHub Actions.
+
 ## Quick Start
 
 EPANET-CGGA accepts standard EPANET `.inp` files. To enable adaptive hydraulic analysis, add the following option to the `[OPTIONS]` section of the input file:
@@ -73,6 +89,28 @@ EPANET-CGGA.exe Networks/Onizuka1986-EPA3.inp output.rpt output.out
 ```
 
 If `Hyd_Solver` is omitted or set to `GGA`, the solver falls back to the standard EPANET 3 steady-state global gradient algorithm.
+
+### Configuration
+
+The four unsteadiness thresholds governing mode selection are public members
+of `CGGASolver` in `src/Solvers/cggasolver.h`:
+
+| Parameter | Symbol | Default | Units |
+|---|---|---|---|
+| `phiA_D` | φ_A,D | 0.1 | m |
+| `phiR_D` | φ_R,D | 0.08 | – |
+| `phiA_I` | φ_A,I | 0.05 | m |
+| `phiR_I` | φ_R,I | 0.04 | – |
+
+The dynamic thresholds must exceed the inertial ones. Per-mode time steps are
+the compile-time constants `Delta_WH` (0.01 s), `Delta_RWC` (1.0 s) and
+`Delta_QS` (10.0 s) in the same header.
+
+### Output
+
+Alongside the standard EPANET report, the solver writes an unsteadiness
+indicator log recording, at each integer second, the active mode and the
+maximum absolute and relative indicators across the network.
 
 ### Wave Speed Specification
 
