@@ -55,7 +55,7 @@ cmake --build . --config Release
 
 Replace `"Visual Studio 17 2022"` with the generator string matching your installed Visual Studio version (run `cmake --help` to list available generators).
 
-The build produces the executable in `build/Release/`.
+The build produces the executable in `build/bin/Release/`.
 
 ## Tests
 
@@ -85,7 +85,7 @@ Hyd_Solver        CGGA
 Run the solver from the command line:
 
 ```bash
-EPANET-CGGA.exe Networks/Onizuka1986-EPA3.inp output.rpt output.out
+run-epanet3.exe Networks/Onizuka1986-EPA3.inp output.rpt output.out
 ```
 
 If `Hyd_Solver` is omitted or set to `GGA`, the solver falls back to the standard EPANET 3 steady-state global gradient algorithm.
