@@ -6,7 +6,7 @@
 [![Language: C++](https://img.shields.io/badge/Language-C%2B%2B-blue.svg)](https://isocpp.org/)
 [![Build: CMake](https://img.shields.io/badge/Build-CMake-064F8C.svg)](https://cmake.org/)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6.svg)](#building)
-<!-- [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX) -->
+<!-- [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20199101.svg)](https://doi.org/10.5281/zenodo.20199101) -->
 
 ---
 
