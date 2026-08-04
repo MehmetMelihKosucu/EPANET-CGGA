@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.8...3.13)
+cmake_minimum_required (VERSION 3.16)
 SET (EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 SET (LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 
