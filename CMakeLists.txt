@@ -164,3 +164,6 @@ target_precompile_headers(epanet3 PRIVATE
     <map>
     # Add other common headers
 )
+
+enable_testing()
+add_subdirectory(tests)
