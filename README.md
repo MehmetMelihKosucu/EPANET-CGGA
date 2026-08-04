@@ -2,6 +2,7 @@
 
 **An adaptive hybrid hydraulic solver for unsteady pipe network analysis, implemented as an object-oriented extension of EPANET 3.**
 
+[![build-and-test](https://github.com/MehmetMelihKosucu/EPANET-CGGA/actions/workflows/ci.yml/badge.svg)](https://github.com/MehmetMelihKosucu/EPANET-CGGA/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Language: C++](https://img.shields.io/badge/Language-C%2B%2B-blue.svg)](https://isocpp.org/)
 [![Build: CMake](https://img.shields.io/badge/Build-CMake-064F8C.svg)](https://cmake.org/)
