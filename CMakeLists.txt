@@ -3,6 +3,7 @@ SET (EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 SET (LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 
 project ("EPANET")
+
 set_property( GLOBAL PROPERTY USE_FOLDERS ON)
 SET (CMAKE_C_FLAGS "-std=c99")
 if(MSVC)
@@ -13,7 +14,6 @@ if(MSVC)
     add_definitions(-D_CRT_SECURE_NO_DEPRECATE)  
 else()
 	# -I. is needed so gcc can find the generated export header
-	SET (CMAKE_CXX_FLAGS "-Wall -std=c++11")
 endif(MSVC)
 
 SET (epanet_lib_sources 
