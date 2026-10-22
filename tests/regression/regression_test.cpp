@@ -231,9 +231,10 @@ bool onDecimatedGrid(double t)
     return std::fabs(r - std::round(r)) < 1e-6;
 }
 
-void writeCsv(const std::string& path, const Series& s, const Summary& sum)
+bool writeCsv(const std::string& path, const Series& s, const Summary& sum)
 {
     std::ofstream f(path);
+    if (!f) return false;
     f << "# EPANET-CGGA regression reference\n";
     f << "# input: " << sum.inpName << "\n";
     f << "# steps: " << sum.steps << "\n";
@@ -273,6 +274,7 @@ void writeCsv(const std::string& path, const Series& s, const Summary& sum)
         }
         f << "\n";
     }
+    return static_cast<bool>(f);
 }
 
 bool parseExtremes(const std::string& line, std::vector<Extreme>& out)
@@ -450,13 +452,18 @@ int main(int argc, char* argv[])
         return 1;
     }
     Summary candSum = summarize(cand, baseName(inp));
-    writeCsv(out, cand, candSum);
     std::printf("  simulation completed: %ld steps, end time %.2f s\n",
                 candSum.steps, cand.time.back());
+    if (!writeCsv(out, cand, candSum))
+        std::printf("  warning: result file %s could not be written\n", out.c_str());
 
     if (update)
     {
-        writeCsv(ref, cand, candSum);
+        if (!writeCsv(ref, cand, candSum))
+        {
+            std::printf("  FAIL  reference file %s could not be written\n", ref.c_str());
+            return 1;
+        }
         std::printf("  reference written to %s\n", ref.c_str());
         return 0;
     }

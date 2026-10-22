@@ -10,6 +10,9 @@ on:
   push:
     branches: [ regression-tests ]
 
+permissions:
+  contents: write
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -31,3 +34,15 @@ jobs:
         with:
           name: regression-references
           path: tests/regression/reference/*.csv
+          if-no-files-found: error
+
+      # Bootstrap only: commit the first set of reference files to the branch.
+      - name: Commit reference files (bootstrap)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/regression-tests'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/regression/reference/*.csv
+          git commit -m "Add regression reference files generated on windows-latest (MSVC, x64, Release)"
+          git push

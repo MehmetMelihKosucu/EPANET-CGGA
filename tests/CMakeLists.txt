@@ -40,6 +40,7 @@ target_link_libraries(regression_test epanet3)
 set(REG_REF_DIR ${CMAKE_SOURCE_DIR}/tests/regression/reference)
 set(REG_OUT_DIR ${CMAKE_BINARY_DIR}/regression_results)
 file(MAKE_DIRECTORY ${REG_OUT_DIR})
+file(MAKE_DIRECTORY ${REG_REF_DIR})
 
 # add_regression_case(<name> <input file> <comma-separated node ids> <timeout s> <labels>)
 set(REG_UPDATE_COMMANDS "")
