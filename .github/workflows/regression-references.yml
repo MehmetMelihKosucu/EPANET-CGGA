@@ -1,0 +1,33 @@
+name: regression-references
+
+# Regenerates the reference files in tests/regression/reference/ with the
+# same Windows build that the CI uses, and uploads them as an artifact.
+# Run it manually from the Actions tab after an intended change in results,
+# then commit the downloaded files.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ regression-tests ]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -A x64
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Regenerate reference files
+        run: cmake --build build --config Release --target regression_update
+
+      - name: Upload reference files
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-references
+          path: tests/regression/reference/*.csv

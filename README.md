@@ -47,9 +47,10 @@ EPANET-CGGA/
 │   ├── Output/             # Report and binary output writers
 │   ├── Solvers/            # GGA, RWC-GGA and CGGA solvers
 │   └── Utilities/          # Support utilities
-├── tests/                  # Unit tests for the flow history subsystem
+├── tests/                  # Unit and regression tests
 │   ├── CMakeLists.txt
-│   └── test_flowhistory.cpp
+│   ├── test_flowhistory.cpp
+│   └── regression/         # Regression test program, reference results, README
 ├── CITATION.cff
 ├── CMakeLists.txt
 ├── LICENSE
@@ -74,19 +75,29 @@ The build produces the executable in `build/bin/Release/`.
 
 ## Tests
 
-The flow history subsystem is verified in isolation by a unit test suite
-under `tests/`. Build with testing enabled and run:
+Two kinds of tests are provided under `tests/`.
+
+**Unit tests** verify the flow history subsystem in isolation. They cover
+circular-buffer construction and capacity, the linear interpolation used on
+the reach-back path, per-pipe history registration, and the requirement that a
+reach-back query which cannot be satisfied from stored data reports failure
+rather than returning extrapolated values.
+
+**Regression tests** run complete simulations of the benchmark networks and
+compare the head series at the monitored nodes, the peak and minimum heads, and
+the QS/RWC/WH mode schedule with reference results stored in
+`tests/regression/reference/`. Details are given in
+[`tests/regression/README.md`](tests/regression/README.md).
 
 ```bash
 cd build
-ctest -C Release
+ctest -C Release -LE long      # unit tests and the Onizuka and Nault-Karney regression tests
+ctest -C Release -L long       # the 24 h Hadimkoy regression test
 ```
 
-The suite covers circular-buffer construction and capacity, the linear
-interpolation used on the reach-back path, per-pipe history registration,
-and the requirement that a reach-back query which cannot be satisfied from
-stored data reports failure rather than returning extrapolated values.
-Tests run automatically on every commit via GitHub Actions.
+The unit tests and the Onizuka and Nault–Karney regression tests run
+automatically on every commit via GitHub Actions. The 24 h Hadımköy regression
+test runs weekly, on every release, and on request.
 
 ## Quick Start
 
@@ -139,8 +150,9 @@ reported in the accompanying paper, together with a classical reference case:
 | Network | Size | Transient event | Source |
 |---|---|---|---|
 | `Tnet1-EPA3.inp` | 7 junctions, 9 pipes, 1 reservoir, 1 valve | Valve closure at a network boundary (CCV on a 400 mm line) | Streeter & Wylie (1967) |
-| `Onizuka1986-EPA3.inp` | 6 junctions, 9 pipes, 3 reservoirs, 1 tank, 2 valves | Linear valve closure over 100 s, analysed at two tank diameters | Onizuka (1986) |
-| `EPA3-Nault2016.inp` | 34 junctions, 44 pipes, 3 reservoirs, 8 pumps, 1 valve | Pump shutoff and restart in a looped network | Nault & Karney (2016) |
+| `Onizuka1986-EPA3.inp` | 6 junctions, 9 pipes, 3 reservoirs, 1 tank (diameter 1 m), 2 valves | Linear valve closure over 100 s | Onizuka (1986) |
+| `Onizuka1986-EPA3-D10.inp` | Same network, tank diameter 10 m | Linear valve closure over 100 s | Onizuka (1986) |
+| `EPA3-Nault2016.inp` | 34 junctions, 44 pipes, 3 reservoirs, 8 pumps, 1 valve | Two pumps started at 30 s (one in each station), one pump shut off at 150 s | Network: Nault & Karney (2016); scenario: this study |
 | `EPA3-hk-burst.inp` | 212 junctions, 231 pipes, 2 reservoirs, 2 valves | Pipe burst at 03:30 within a 24 h extended-period simulation | Hadımköy WDS, Istanbul |
 
 The Hadımköy model includes pressure-dependent leakage. Pipes shorter than the
@@ -152,12 +164,12 @@ accompanying paper.
 
 | Feature | EPANET-CGGA | TSNet | PTSNet | ALLIEVI | Bentley HAMMER |
 |---|---|---|---|---|---|
-| License | MIT | MIT | MIT | Proprietary | Commercial |
-| Language | C++14 | Python | Python | Windows GUI | Windows GUI |
+| License | MIT | MIT | MIT | Proprietary (free license) | Commercial |
+| Code / interface | C++14 | Python | Python | Closed source (Windows GUI) | Closed source (Windows GUI) |
 | Algorithm family | Adaptive CGGA | MOC | MOC | MOC | MOC |
 | Adaptive QS/RWC/WH switching | ✅ | ❌ | ❌ | ❌ | ❌ |
 | EPANET 3 native integration | ✅ | wraps EPANET externally | wraps EPANET externally | manual | import path |
-| Cost to user | Free | Free | Free | License fee | License fee |
+| Cost to user | Free | Free | Free | Free (registration required) | License fee |
 
 ## Citation
 

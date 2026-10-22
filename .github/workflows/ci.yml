@@ -18,5 +18,16 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Unit tests
+        run: ctest --test-dir build -C Release -L unit --output-on-failure
+
+      - name: Regression tests (Onizuka and Nault and Karney networks)
+        run: ctest --test-dir build -C Release -L regression -LE long --output-on-failure
+
+      - name: Upload regression results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-results
+          path: build/regression_results/*.csv
+          if-no-files-found: ignore
