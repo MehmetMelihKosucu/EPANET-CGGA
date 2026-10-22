@@ -68,10 +68,7 @@ endfunction()
 add_regression_case(onizuka_d10 ${CMAKE_SOURCE_DIR}/Networks/Onizuka1986-EPA3-D10.inp "J1,J2,T1" 1800 "regression")
 add_regression_case(onizuka_d1  ${CMAKE_SOURCE_DIR}/Networks/Onizuka1986-EPA3.inp     "J1,J2,T1" 1800 "regression")
 add_regression_case(nault2016   ${CMAKE_SOURCE_DIR}/Networks/EPA3-Nault2016.inp        "J16,J24"  1800 "regression")
-# For the 24 h case the comparison ends at the end of the water hammer interval
-# (see tests/regression/README.md).
-add_regression_case(hadimkoy    ${CMAKE_SOURCE_DIR}/Networks/EPA3-hk-burst.inp         "612,3234" 3600 "regression"
-                    --window first-wh)
+add_regression_case(hadimkoy    ${CMAKE_SOURCE_DIR}/Networks/EPA3-hk-burst.inp         "612,3234" 3600 "regression")
 
 # Regenerates every reference file from the current build:
 #     cmake --build build --config Release --target regression_update

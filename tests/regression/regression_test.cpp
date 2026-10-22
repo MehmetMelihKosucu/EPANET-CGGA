@@ -20,10 +20,7 @@
 //!                   [--window first-wh] [--update]
 //!
 //! With --window first-wh the comparison ends at the end of the first water
-//! hammer interval of the reference run. This is used for the 24 h Hadimkoy
-//! case, in which the later return from the RWC to the QS mode depends on
-//! indicator values close to the inertial threshold and was found to vary
-//! between otherwise identical runs on different CI machines.
+//! hammer interval of the reference run (optional; not used by default).
 //!
 //! With --update the reference file is (re)written from the current run and
 //! no comparison is made. Without it the program returns 0 if all checks

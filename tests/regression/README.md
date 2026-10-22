@@ -29,16 +29,6 @@ checks three things against the reference file:
 | `regression_nault2016` | `EPA3-Nault2016.inp` | J16, J24 |
 | `regression_hadimkoy` | `EPA3-hk-burst.inp` (24 h) | 612, 3234 |
 
-For the 24 h Hadımköy case the comparison ends at the end of the water hammer
-interval that follows the burst (`--window first-wh`). After this interval the
-solver passes through the RWC mode and returns to the QS mode when the
-indicators fall below the inertial thresholds. In this network the indicators
-stay close to the inertial thresholds for some time, and the instant of the
-return to the QS mode differed between otherwise identical runs on different
-`windows-latest` machines (13 880 s in one run and 14 052 s in another, with
-identical results up to 13 878 s). Such a difference is caused by round-off,
-not by a change in the code, so it is excluded from the comparison.
-
 All runs use the threshold values compiled into `CGGASolver`
 (`src/Solvers/cggasolver.h`). The tests therefore check that the code gives
 the same results for fixed inputs and settings.
@@ -59,6 +49,10 @@ together take about three minutes.
 The result of each run is written to `build/regression_results/<test>.csv`
 in the same format as the reference file, so a failed comparison can be
 inspected directly.
+
+The tests were run on six `windows-latest` machines with five different
+processors (Intel Xeon Platinum 8370C and 8573C, AMD EPYC 7763, 9V45 and
+9V74), and all four cases gave the same results on all of them.
 
 ## Reference files
 
