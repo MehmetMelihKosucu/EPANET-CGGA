@@ -91,13 +91,10 @@ the QS/RWC/WH mode schedule with reference results stored in
 
 ```bash
 cd build
-ctest -C Release -LE long      # unit tests and the Onizuka and Nault-Karney regression tests
-ctest -C Release -L long       # the 24 h Hadimkoy regression test
+ctest -C Release
 ```
 
-The unit tests and the Onizuka and Nault–Karney regression tests run
-automatically on every commit via GitHub Actions. The 24 h Hadımköy regression
-test runs weekly, on every release, and on request.
+All tests run automatically on every commit via GitHub Actions.
 
 ## Quick Start
 

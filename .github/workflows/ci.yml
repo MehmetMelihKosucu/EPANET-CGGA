@@ -21,8 +21,8 @@ jobs:
       - name: Unit tests
         run: ctest --test-dir build -C Release -L unit --output-on-failure
 
-      - name: Regression tests (Onizuka and Nault and Karney networks)
-        run: ctest --test-dir build -C Release -L regression -LE long --output-on-failure
+      - name: Regression tests
+        run: ctest --test-dir build -C Release -L regression --output-on-failure
 
       - name: Upload regression results
         if: always()

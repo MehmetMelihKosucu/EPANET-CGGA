@@ -22,12 +22,12 @@ checks three things against the reference file:
    interval is identified from the time step size (WH: dt < 0.5 s,
    RWC: 0.5 s ≤ dt < 5 s, QS: dt ≥ 5 s).
 
-| Test | Input file | Monitored nodes | Label |
-|---|---|---|---|
-| `regression_onizuka_d10` | `Onizuka1986-EPA3-D10.inp` (tank diameter 10 m) | J1, J2, T1 | `regression` |
-| `regression_onizuka_d1` | `Onizuka1986-EPA3.inp` (tank diameter 1 m) | J1, J2, T1 | `regression` |
-| `regression_nault2016` | `EPA3-Nault2016.inp` | J16, J24 | `regression` |
-| `regression_hadimkoy` | `EPA3-hk-burst.inp` (24 h) | 612, 3234 | `regression;long` |
+| Test | Input file | Monitored nodes |
+|---|---|---|
+| `regression_onizuka_d10` | `Onizuka1986-EPA3-D10.inp` (tank diameter 10 m) | J1, J2, T1 |
+| `regression_onizuka_d1` | `Onizuka1986-EPA3.inp` (tank diameter 1 m) | J1, J2, T1 |
+| `regression_nault2016` | `EPA3-Nault2016.inp` | J16, J24 |
+| `regression_hadimkoy` | `EPA3-hk-burst.inp` (24 h) | 612, 3234 |
 
 All runs use the threshold values compiled into `CGGASolver`
 (`src/Solvers/cggasolver.h`). The tests therefore check that the code gives
@@ -38,9 +38,13 @@ the same results for fixed inputs and settings.
 ```bash
 cmake -B build -A x64
 cmake --build build --config Release
-ctest --test-dir build -C Release -LE long --output-on-failure   # all except the 24 h run
-ctest --test-dir build -C Release -L long  --output-on-failure   # only the 24 h run
+ctest --test-dir build -C Release --output-on-failure                 # all tests
+ctest --test-dir build -C Release -L regression --output-on-failure  # regression tests only
 ```
+
+All four regression tests run on every commit through the continuous
+integration workflow. On the `windows-latest` runner, the four simulations
+together take about three minutes.
 
 The result of each run is written to `build/regression_results/<test>.csv`
 in the same format as the reference file, so a failed comparison can be

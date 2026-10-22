@@ -5,13 +5,12 @@
 #     add_subdirectory(tests)
 #
 # Labels
-#   unit        unit tests of the flow history subsystem (fast)
+#   unit        unit tests of the flow history subsystem
 #   regression  complete simulations compared with stored reference results
-#   long        the 24 h Hadimkoy simulation; excluded from the default CI run
 #
 # Examples
-#   ctest --test-dir build -C Release -LE long        (everything except long)
-#   ctest --test-dir build -C Release -L long         (only the long test)
+#   ctest --test-dir build -C Release                 (all tests)
+#   ctest --test-dir build -C Release -L regression   (regression tests only)
 
 # ---------------------------------------------------------------------------
 # Unit tests
@@ -68,7 +67,7 @@ endfunction()
 add_regression_case(onizuka_d10 ${CMAKE_SOURCE_DIR}/Networks/Onizuka1986-EPA3-D10.inp "J1,J2,T1" 1800 "regression")
 add_regression_case(onizuka_d1  ${CMAKE_SOURCE_DIR}/Networks/Onizuka1986-EPA3.inp     "J1,J2,T1" 1800 "regression")
 add_regression_case(nault2016   ${CMAKE_SOURCE_DIR}/Networks/EPA3-Nault2016.inp        "J16,J24"  1800 "regression")
-add_regression_case(hadimkoy    ${CMAKE_SOURCE_DIR}/Networks/EPA3-hk-burst.inp         "612,3234" 14400 "regression;long")
+add_regression_case(hadimkoy    ${CMAKE_SOURCE_DIR}/Networks/EPA3-hk-burst.inp         "612,3234" 3600 "regression")
 
 # Regenerates every reference file from the current build:
 #     cmake --build build --config Release --target regression_update
