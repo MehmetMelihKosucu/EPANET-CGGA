@@ -273,16 +273,6 @@ void findNodeOutflows(double lamda, double dH[], double xQ[], Network* nw)
             continue;
         }
 
-        // Safely get the node type once
-        
-        try {
-			int mmk = node->type();
-        }
-        catch (const std::exception& e) {
-            std::cerr << "Error: Failed to get node type at index " << i << ": " << e.what() << std::endl;
-            continue;
-        }
-
         // Now perform the type checking
         if (Node::NodeType() != Node::JUNCTION && Node::NodeType() != Node::TANK && Node::NodeType() != Node::RESERVOIR) {
             std::cerr << "Error: Invalid node type at index " << i << std::endl;
@@ -464,11 +454,6 @@ double findTotalFlowChange(double lamda, double dQ[], Network* nw)
 
         Link* link = nw->links[i];
 
-		if (link->index == 8)
-		{
-			int mmk = 36;
-		}
-
         dq = lamda * dQ[i];
         dqSum += abs(dq);
         qSum += abs(link->flow + dq);
@@ -576,34 +561,26 @@ double HydBalance::findUnsteadyHeadErrorNorm(
         double h1 = link->fromNode->head + lamda * dH[n1];
         double h2 = link->toNode->head + lamda * dH[n2];
 
-        if (link->type() == Link::PIPE) {
+        if (link->type() == Link::PIPE)
+        {
             Pipe* pipe = dynamic_cast<Pipe*>(link);
-            if (pipe) {
-                bool node1IsIntermediate = nodeHasIncompressibleLink[n1];
-                bool node2IsIntermediate = nodeHasIncompressibleLink[n2];
-
-                if (node1IsIntermediate) {
-                    xQ[n1] -= pipe->startFlow;
-                }
-                else {
-                    xQ[n1] -= pipe->startFlow;
-                }
-
-                if (node2IsIntermediate) {
-                    xQ[n2] += pipe->endFlow;
-                }
-                else {
-                    xQ[n2] += pipe->endFlow;
-                }
+            if (pipe)
+            {
+                xQ[n1] -= (pipe->startFlow + lamda * dQ_start[i]);
+                xQ[n2] += (pipe->endFlow + lamda * dQ_end[i]);
             }
-            else {
-                xQ[n1] -= link->flow;
-                xQ[n2] += link->flow;
+            else
+            {
+                double flow = link->flow + lamda * dQ[i];
+                xQ[n1] -= flow;
+                xQ[n2] += flow;
             }
         }
-        else {
-            xQ[n1] -= link->flow;
-            xQ[n2] += link->flow;
+        else
+        {
+            double flow = link->flow + lamda * dQ[i];
+            xQ[n1] -= flow;
+            xQ[n2] += flow;
         }
 
         if (link->type() == Link::PIPE)
@@ -727,10 +704,6 @@ double HydBalance::findUnsteadyHeadErrorNorm(
                 maxCharErr = maxCharErrLink;
             }
 
-			if (charErrStart > 2 || charErrEnd > 2) {
-				int mmk = 1409;  // Debugging breakpoint
-            }
-
             norm += charErrStart * charErrStart + charErrEnd * charErrEnd;
             count += 2.0;
         }
@@ -786,10 +759,6 @@ void HydBalance::findUnsteadyNodeOutflows(double lamda, double dH[], double xQ[]
         double q = 0.0;
         double dqdh = 0.0;
 
-        if (i == 1292) {
-            int mmk = 1409;  // Debugging breakpoint
-        }
-
         // ... for junctions, outflow depends on head
         if (node->type() == Node::JUNCTION)
         {
@@ -798,7 +767,6 @@ void HydBalance::findUnsteadyNodeOutflows(double lamda, double dH[], double xQ[]
             node->qGrad += dqdh;
             node->outflow += q;
             xQ[i] -= q;
-            double HASTIRLAN;
             // ... contribution from demand flow
             // ... for fixed grade junction, demand is remaining flow excess
             if (node->fixedGrade)
@@ -809,11 +777,9 @@ void HydBalance::findUnsteadyNodeOutflows(double lamda, double dH[], double xQ[]
             // ... otherwise junction has pressure-dependent demand
             else
             {
-                
                 q = node->findActualDemand(nw, h, dqdh);
                 node->qGrad += dqdh;
                 xQ[i] -= q;
-                HASTIRLAN = xQ[i];
             }
             node->actualDemand = q;
             node->outflow += q;
@@ -830,126 +796,33 @@ void HydBalance::findUnsteadyNodeOutflows(double lamda, double dH[], double xQ[]
     }
 }
 
-double HydBalance::findUnsteadyFlowErrorNorm(double xQ[], Network* nw) {
+double HydBalance::findUnsteadyFlowErrorNorm(double xQ[], Network* nw)
+{
     double norm = 0.0;
     maxFlowErr = 0.0;
     maxFlowErrNode = -1;
-    
-    // Get basic network information
+
     int nodeCount = nw->nodes.size();
-    
-    // Step 1: Identify hydraulic domains created by closed valves
-    std::vector<int> nodeDomain(nodeCount, -1);
-    
-    // Step 2: Identify nodes that are directly connected to closed valves
-    // These nodes require special treatment in error assessment
-    std::vector<bool> nodeConnectedToClosedValve(nodeCount, false);
-    
-    for (int i = 0; i < nodeCount; i++) {
+    if (nodeCount == 0) return 0.0;
+
+    for (int i = 0; i < nodeCount; i++)
+    {
         Node* node = nw->nodes[i];
+        if (!node) continue;
 
-        if (i == 1308) {
-            int mmk = 1409;  // Debugging breakpoint
-        }
-
-        if (!node || node->fixedGrade) continue;
-        
-        // Check all links connected to this node
-        for (Link* link : nw->getLinksConnectedToNode(node)) {
-            if (link->status == Link::LINK_CLOSED) // || abs(link->flow) < 1e-3) 
-            {
-                // This node is directly connected to a closed valve
-                nodeConnectedToClosedValve[i] = true;
-                break; // No need to check further links for this node
-            } 
-        }
-    } // */
-    
-    // Step 3: Calculate domain-specific errors (excluding closed valve nodes)
-    std::map<int, double> domainTotalError;
-    std::map<int, int> domainNodeCount;
-    std::map<int, int> domainActiveNodeCount; // Nodes not connected to closed valves
-    
-    int totalActiveNodes = 0; // Counter for nodes included in error calculation
-    
-    for (int i = 0; i < nodeCount; i++) {
-        Node* node = nw->nodes[i];
-        if (!node || node->fixedGrade) continue;
-        //if (!node) continue; // Skip null nodes
-
-        int domain = nodeDomain[i];
-
-        if (i == 1308) {
-            int mmk = 1409;  // Debugging breakpoint
-        }
-        
-        // Always track basic domain statistics
-        domainTotalError[domain] += xQ[i] * xQ[i];
-        domainNodeCount[domain]++;
-        
-        // Skip nodes connected to closed valves for active error calculation
-        if (nodeConnectedToClosedValve[i]) {
-            // Log this exclusion for transparency
-            if (abs(xQ[i]) > 0.1) {
-                nw->msgLog << "\nExcluding node " << node->name 
-                          << " from error calculation (connected to closed valve, error=" 
-                          << abs(xQ[i]) << ")";
-            }
-            continue; // Skip this node in active error calculations
-        } // */
-        
-        // Count active nodes for this domain
-        domainActiveNodeCount[domain]++;
-        totalActiveNodes++;
-        
-        // Track global maximum error (only among active nodes)
-        if (abs(xQ[i]) > maxFlowErr) {
+        // No exclusions, exactly as in findFlowErrorNorm(). Fixed-grade nodes,
+        // reservoirs and tanks already had their imbalance absorbed into
+        // node->outflow and xQ[i] set to zero by findUnsteadyNodeOutflows(),
+        // so they contribute zero to the sum on their own.
+        if (abs(xQ[i]) > maxFlowErr)
+        {
             maxFlowErr = abs(xQ[i]);
             maxFlowErrNode = i;
         }
-        
-        // Add to overall error norm (only active nodes)
         norm += xQ[i] * xQ[i];
     }
-    
-    // Step 4: Provide comprehensive diagnostic information
-    if (maxFlowErr > 0.1) {
-        nw->msgLog << "\n--- Flow Error Analysis by Hydraulic Domain ---";
-        
-        for (auto& pair : domainTotalError) {
-            int domain = pair.first;
-            int totalNodes = domainNodeCount[domain];
-            int activeNodes = domainActiveNodeCount[domain];
-            
-            if (activeNodes > 0) {
-                double avgDomainErrorActive = pair.second / activeNodes;
-                
-                nw->msgLog << "\nDomain " << domain << ": " << activeNodes 
-                          << " active nodes (out of " << totalNodes << " total)";
-                
-                // Only report significant errors in active nodes
-                if (avgDomainErrorActive > 0.01) {
-                    nw->msgLog << "  Average continuity error: " << sqrt(avgDomainErrorActive);
-                }
-            } else {
-                nw->msgLog << "\nDomain " << domain << ": All " << totalNodes 
-                          << " nodes connected to closed valves (excluded from analysis)";
-            }
-        }
-        
-        nw->msgLog << "\nTotal active nodes in error calculation: " << totalActiveNodes 
-                  << " out of " << nodeCount;
-    }
-    
-    // Step 5: Return normalized error based only on hydraulically active nodes
-    // This gives a more accurate picture of simulation health
-    if (totalActiveNodes > 0) {
-        return norm / totalActiveNodes;
-    } else {
-        // Special case: if all nodes are connected to closed valves
-        nw->msgLog << "\nWarning: All nodes connected to closed valves - cannot assess flow error";
-        return 0.0;
-    }
+
+    return norm / nodeCount;
 }
 
 //  Find the sum of all link flow changes relative to the sum of all link flows

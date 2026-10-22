@@ -11,6 +11,7 @@
 #include "Models/headlossmodel.h"
 #include "Models/leakagemodel.h"
 #include "junction.h"
+#include <cstdlib>
 
 #include <iostream>
 #include <cmath>
@@ -260,12 +261,12 @@ void Pipe::validateStatus(Network* nw, double qTol)
 double Pipe::computeShearDecayCoeff(double flow) const {
     const double D = diameter;
     const double A = PI * D * D / 4.0;
-    const double nu = 1e-6;  // Kinematic viscosity (m²/s)
+    const double nu = 1.08e-5;  // Kinematic viscosity (ft²/s)
 
     double Re = fabs(flow) * D / (A * nu);
 
     // Minimum effective value to ensure some damping always occurs
-    const double k_min = 0.06;
+    const double k_min = 0.00000001; // 0.06;
 
     if (Re < 2300) {
         // Laminar flow: theoretical value is reasonable
@@ -280,6 +281,25 @@ double Pipe::computeShearDecayCoeff(double flow) const {
         return std::max(3.0 * k_theoretical, k_min);
     }
 }
+
+/*double Pipe::getWaveSpeed() const {
+    // Dalga hizi (m/s). CGGA_WAVE_SPEED ortam degiskeni tanimliysa onu,
+    // degilse varsayilan degeri kullanir. Her kosu ayri bir surec oldugu
+    // icin deger surecin basinda bir kez okunur ve kullanilan deger
+    // dogrulama icin stderr'e bir kez yazilir.
+    static const double a_ms = [] {
+        const double VARSAYILAN = 319.0;   // m/s
+#ifdef _MSC_VER
+#pragma warning(suppress : 4996)
+#endif
+        const char* s = std::getenv("CGGA_WAVE_SPEED");
+        double v = s ? std::atof(s) : 0.0;
+        if (v <= 0.0) v = VARSAYILAN;
+        std::cerr << "[CGGA] wave speed = " << v << " m/s\n";
+        return v;
+        }();
+    return a_ms / 0.3048;   // motor ft/s ile calisiyor
+} // */
 
 double Pipe::getWaveSpeed() const {
     // Constants in FPS (Imperial) units
@@ -301,7 +321,7 @@ double Pipe::getWaveSpeed() const {
 
     double waveSpeed = 0;
 
-    /*if( index == 4 ) {
+    /*if (index == 4) {
         typeCoefficient = 12;
     }
     else if (index == 7 || index == 8) {
@@ -311,7 +331,7 @@ double Pipe::getWaveSpeed() const {
         typeCoefficient = 1;
     } // */
 
-    if( index == 4 ) {
+    /*if (index == 4) {
         waveSpeed = 1000 / 0.3048;
     }
     else if (index == 7 || index == 8) {
@@ -329,12 +349,66 @@ double Pipe::getWaveSpeed() const {
     } // */
 
     // Compute wave speed (a) during water hammer
-    //double waveSpeed = sqrt((K / rho) / (1 + (K / E) * (D / e) * typeCoefficient));
+    waveSpeed = 1000 / 0.3048; // 319 / 0.3048; // sqrt((K / rho) / (1 + (K / E) * (D / e) * typeCoefficient));
 
-    return waveSpeed;  // Returns wave speed in ft/s
-}
+    return waveSpeed;  // Returns wave speed in ft/s // */
+} // */
 
+/*double Pipe::getWaveSpeed() const { // ASCE
+    // --- Properties in SI units ---
+    // Ductile iron pipe
+    const double E = 1.65e11;   // Young's modulus, Pa  (~165 GPa)
+    // Water at ~15-20 C
+    const double K = 2.19e9;    // Bulk modulus, Pa     (~2.19 GPa)
+    const double rho = 998.0;     // Density, kg/m^3
 
+    // Wall-thickness-to-diameter ratio for ductile iron (AWWA C150/C151
+    // gives roughly 0.015-0.025 over this size range; 0.02 is representative).
+    // D/e is dimensionless, so the diameter's unit does not affect the result.
+    // Replace with the actual pressure-class thickness per pipe if known.
+    const double eOverD = 0.02;
+    if (eOverD <= 0.0)
+        throw std::invalid_argument("Wall-thickness ratio must be > 0.");
+    const double DoverE = 1.0 / eOverD;   // = 50
+
+    // Pipe restraint coefficient (Korteweg c1):
+    //   1.0            -> thin wall, frequent expansion joints (no axial restraint)
+    //   1 - nu^2 (~0.92, nu=0.28 for ductile iron) -> anchored against axial motion
+    const double c1 = 1.0;
+
+    // Korteweg wave speed in SI, m/s
+    const double a_ms = std::sqrt((K / rho) / (1.0 + (K / E) * DoverE * c1));
+
+    // Engine expects wave speed in ft/s (matches the original 1000/0.3048 usage).
+    return a_ms / 0.3048;   // m/s -> ft/s   (~1148 m/s -> ~3768 ft/s)
+} // */
+
+/*double Pipe::getWaveSpeed() const { // Turkish Journal of Hydraulic
+    // --- HDPE (PE100) pressure pipe, SI units ---
+    // Short-term (instantaneous) dynamic modulus for a rapid transient.
+    // NOT the long-term creep modulus (~0.2-0.3 GPa); a fast event sees the
+    // stiff, short-term response. Representative range 0.8-1.5 GPa.
+    const double E = 1.1e9;     // Young's modulus, Pa  (~1.1 GPa, short-term PE100)
+    const double K = 2.19e9;    // Water bulk modulus, Pa (~2.19 GPa, 15-20 C)
+    const double rho = 998.0;     // Water density, kg/m^3
+
+    // HDPE is specified by SDR = outside diameter / wall thickness.
+    // SDR 11 (PN16) and SDR 17 (PN10) are typical. e/D = 1/SDR, so D/e = SDR.
+    const double SDR = 11.0;      // set to the actual pressure class used
+    if (SDR <= 0.0)
+        throw std::invalid_argument("SDR must be > 0.");
+    const double DoverE = SDR;    // D/e = SDR
+
+    // Restraint coefficient (Korteweg c1). For thin-wall thermoplastic with
+    // expansion joints, 1.0; if axially restrained, 1 - nu^2 (nu ~ 0.45 for HDPE).
+    const double c1 = 1.0;
+
+    // Korteweg wave speed, m/s
+    const double a_ms = std::sqrt((K / rho) / (1.0 + (K / E) * DoverE * c1));
+
+    // Engine expects ft/s.
+    return a_ms / 0.3048;   // ~310 m/s for these values
+} // */
 
 double Pipe::getFrictionFactor(double Re) const {
     // For zero or extremely low Reynolds numbers, avoid division by zero

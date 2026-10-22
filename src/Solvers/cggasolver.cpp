@@ -212,6 +212,7 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
                     }
                 }
                 network->msgLog << "\n  Past values synced to QS state";
+                currentSecondState.isValid = false;
             }
         }
     }
@@ -235,6 +236,28 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
         tstep = computeTimeStepForMode(QUASI_STEADY, currentTime, simulationEndTime);
         result = executeQuasiSteadySolve(tstep, trials, currentTime);
         if (result != HydSolver::SUCCESSFUL) return result;
+
+        prevSecondState.isValid = false;
+        currentSecondState.time = 0.0;
+        currentSecondState.isValid = true;
+
+        int nN = network->count(Element::NODE);
+        currentSecondState.nodeHeads.assign(nN, 0.0);
+        currentSecondState.pipeStartFlows.assign(linkCount, 0.0);
+        currentSecondState.pipeEndFlows.assign(linkCount, 0.0);
+        currentSecondState.pipeFlows.assign(linkCount, 0.0);
+
+        for (Node* node : network->nodes)
+            if (node && node->index >= 0 && node->index < nN)
+                currentSecondState.nodeHeads[node->index] = node->head;
+
+        for (Link* link : network->links) {
+            Pipe* pipe = dynamic_cast<Pipe*>(link);
+            if (!pipe || pipe->index < 0 || pipe->index >= linkCount) continue;
+            currentSecondState.pipeStartFlows[pipe->index] = pipe->startFlow;
+            currentSecondState.pipeEndFlows[pipe->index] = pipe->endFlow;
+            currentSecondState.pipeFlows[pipe->index] = pipe->flow;
+        }
 
         // Initialize indicators to zero at t=0
         maxPhiA = 0.0;
@@ -555,7 +578,7 @@ int CGGASolver::solve(double& tstep_, int& trials, double currentTime) {
 
             bool aboveDynamic = (maxPhiA > phiA_D) && (maxPhiR > phiR_D);
             bool belowInertial = (maxPhiA < phiA_I) && (maxPhiR < phiR_I);
-            bool aboveInertial = !belowInertial;
+            bool aboveInertial = (maxPhiA >= phiA_I) && (maxPhiR >= phiR_I);
 
             if (aboveDynamic && !whLockedOut) {
                 network->msgLog << "\n==================================================";
@@ -924,11 +947,7 @@ void CGGASolver::computeFlowIndicators(double currentTime, double dt) {
     // ------------------------------------------------------------------------
     double timeDiff;
     timeDiff = currentSecondState.time - prevSecondState.time;
-
-    if (timeDiff < dt)
-    {
-        timeDiff = dt;
-    }
+    if (timeDiff < 1.0) timeDiff = 1.0;
   
     maxPhiA = 0.0;
     maxPhiR = 0.0;
