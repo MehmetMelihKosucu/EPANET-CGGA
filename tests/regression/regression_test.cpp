@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <math.h>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -471,6 +472,13 @@ void usage()
 
 int main(int argc, char* argv[])
 {
+#if defined(_MSC_VER) && defined(_M_X64)
+    // The x64 Microsoft C runtime selects between FMA3 and non-FMA3 versions
+    // of its transcendental math functions according to the processor. The
+    // two versions can differ in the last bit, so results could depend on the
+    // machine. The non-FMA3 versions are used here on every machine.
+    _set_FMA3_enable(0);
+#endif
     std::string inp, ref, out, nodeList;
     double tol = 0.01;      // m
     double modeTol = 1.0;   // s
