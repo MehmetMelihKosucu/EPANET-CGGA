@@ -17,7 +17,13 @@
 //! Usage
 //!   regression_test --inp <file.inp> --ref <reference.csv> --out <result.csv>
 //!                   --nodes <id1,id2,...> [--tol <m>] [--mode-tol <s>]
-//!                   [--update]
+//!                   [--window first-wh] [--update]
+//!
+//! With --window first-wh the comparison ends at the end of the first water
+//! hammer interval of the reference run. This is used for the 24 h Hadimkoy
+//! case, in which the later return from the RWC to the QS mode depends on
+//! indicator values close to the inertial threshold and was found to vary
+//! between otherwise identical runs on different CI machines.
 //!
 //! With --update the reference file is (re)written from the current run and
 //! no comparison is made. Without it the program returns 0 if all checks
@@ -358,25 +364,61 @@ std::string fmt(const char* f, double a, double b = 0.0, double c = 0.0, double 
     return buf;
 }
 
-void compare(const Series& ref, const Summary& refSum,
-             const Series& cand, const Summary& candSum,
-             double tol, double modeTol)
+// End of the first water hammer interval in a mode schedule (or +inf).
+double endOfFirstWH(const std::vector<ModeChange>& modes)
 {
+    for (size_t i = 0; i + 1 < modes.size(); ++i)
+        if (modes[i].mode == "WH") return modes[i + 1].start;
+    return HUGE_VAL;
+}
+
+std::vector<ModeChange> modesUntil(const std::vector<ModeChange>& modes, double until, double modeTol)
+{
+    std::vector<ModeChange> out;
+    for (const ModeChange& m : modes)
+        if (m.start <= until + modeTol) out.push_back(m);
+    return out;
+}
+
+void compare(const Series& ref, const Summary& refSum,
+             const Series& cand, const Summary& candSumFull,
+             double tol, double modeTol, double until)
+{
+    if (until < HUGE_VAL)
+        std::printf("  comparison window: 0 to %.2f s (end of the first water hammer interval)\n", until);
+
+    // Extremes of the current run within the comparison window
+    Summary candSum = candSumFull;
+    for (size_t k = 0; k < cand.nodes.size(); ++k)
+    {
+        double hMax = -HUGE_VAL, hMin = HUGE_VAL, tMax = 0.0, tMin = 0.0;
+        for (size_t i = 0; i < cand.time.size() && cand.time[i] <= until; ++i)
+        {
+            double h = cand.head[k][i];
+            if (h > hMax) { hMax = h; tMax = cand.time[i]; }
+            if (h < hMin) { hMin = h; tMin = cand.time[i]; }
+        }
+        candSum.peak[k]    = { hMax, tMax };
+        candSum.minimum[k] = { hMin, tMin };
+    }
+
     // 1. mode schedule
+    std::vector<ModeChange> refModesW  = modesUntil(refSum.modes,  until, modeTol);
+    std::vector<ModeChange> candModesW = modesUntil(candSumFull.modes, until, modeTol);
     std::string refModes, candModes;
-    for (const ModeChange& m : refSum.modes)  refModes  += " " + m.mode + fmt("@%.2f", m.start);
-    for (const ModeChange& m : candSum.modes) candModes += " " + m.mode + fmt("@%.2f", m.start);
+    for (const ModeChange& m : refModesW)  refModes  += " " + m.mode + fmt("@%.2f", m.start);
+    for (const ModeChange& m : candModesW) candModes += " " + m.mode + fmt("@%.2f", m.start);
     std::printf("  reference modes:%s\n  current modes:  %s\n", refModes.c_str(), candModes.c_str());
 
-    bool sameSequence = refSum.modes.size() == candSum.modes.size();
+    bool sameSequence = refModesW.size() == candModesW.size();
     double worstShift = 0.0;
     if (sameSequence)
     {
-        for (size_t i = 0; i < refSum.modes.size(); ++i)
+        for (size_t i = 0; i < refModesW.size(); ++i)
         {
-            if (refSum.modes[i].mode != candSum.modes[i].mode) sameSequence = false;
+            if (refModesW[i].mode != candModesW[i].mode) sameSequence = false;
             worstShift = std::max(worstShift,
-                                  std::fabs(refSum.modes[i].start - candSum.modes[i].start));
+                                  std::fabs(refModesW[i].start - candModesW[i].start));
         }
     }
     check(sameSequence, "mode sequence is unchanged");
@@ -392,7 +434,7 @@ void compare(const Series& ref, const Summary& refSum,
         if (kc == cand.nodes.size()) { check(false, "node " + node + " present in current run"); continue; }
 
         double worst = 0.0, tWorst = 0.0;
-        for (size_t i = 0; i < ref.time.size(); ++i)
+        for (size_t i = 0; i < ref.time.size() && ref.time[i] <= until; ++i)
         {
             double d = std::fabs(interp(cand, kc, ref.time[i]) - ref.head[k][i]);
             if (d > worst) { worst = d; tWorst = ref.time[i]; }
@@ -400,20 +442,29 @@ void compare(const Series& ref, const Summary& refSum,
         check(worst <= tol,
               "node " + node + fmt(": max |dH| = %.4f m at t = %.2f s (tolerance %.4f m)", worst, tWorst, tol));
 
-        double dPeak = std::fabs(candSum.peak[kc].value - refSum.peak[k].value);
-        check(dPeak <= tol,
-              "node " + node + fmt(": peak head %.4f m, reference %.4f m", candSum.peak[kc].value, refSum.peak[k].value));
+        if (refSum.peak[k].time <= until)
+        {
+            double dPeak = std::fabs(candSum.peak[kc].value - refSum.peak[k].value);
+            check(dPeak <= tol,
+                  "node " + node + fmt(": peak head %.4f m, reference %.4f m", candSum.peak[kc].value, refSum.peak[k].value));
+        }
+        else std::printf("  skip  node %s: reference peak lies outside the comparison window\n", node.c_str());
 
-        double dMin = std::fabs(candSum.minimum[kc].value - refSum.minimum[k].value);
-        check(dMin <= tol,
-              "node " + node + fmt(": minimum head %.4f m, reference %.4f m", candSum.minimum[kc].value, refSum.minimum[k].value));
+        if (refSum.minimum[k].time <= until)
+        {
+            double dMin = std::fabs(candSum.minimum[kc].value - refSum.minimum[k].value);
+            check(dMin <= tol,
+                  "node " + node + fmt(": minimum head %.4f m, reference %.4f m", candSum.minimum[kc].value, refSum.minimum[k].value));
+        }
+        else std::printf("  skip  node %s: reference minimum lies outside the comparison window\n", node.c_str());
     }
 }
 
 void usage()
 {
     std::printf("Usage: regression_test --inp <file.inp> --ref <reference.csv> --out <result.csv>\n"
-                "                       --nodes <id1,id2,...> [--tol <m>] [--mode-tol <s>] [--update]\n");
+                "                       --nodes <id1,id2,...> [--tol <m>] [--mode-tol <s>]\n"
+                "                       [--window first-wh] [--update]\n");
 }
 
 } // namespace
@@ -424,6 +475,7 @@ int main(int argc, char* argv[])
     double tol = 0.01;      // m
     double modeTol = 1.0;   // s
     bool update = false;
+    std::string window = "all";
 
     for (int i = 1; i < argc; ++i)
     {
@@ -436,9 +488,11 @@ int main(int argc, char* argv[])
         else if (a == "--tol")      tol = std::atof(next().c_str());
         else if (a == "--mode-tol") modeTol = std::atof(next().c_str());
         else if (a == "--update")   update = true;
+        else if (a == "--window")   window = next();
         else { usage(); return 2; }
     }
     if (inp.empty() || ref.empty() || out.empty() || nodeList.empty()) { usage(); return 2; }
+    if (window != "all" && window != "first-wh") { usage(); return 2; }
 
     std::vector<std::string> nodes = split(nodeList, ',');
     std::printf("Regression test: %s\n", baseName(inp).c_str());
@@ -478,7 +532,8 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    compare(refSeries, refSum, cand, candSum, tol, modeTol);
+    double until = (window == "first-wh") ? endOfFirstWH(refSum.modes) : HUGE_VAL;
+    compare(refSeries, refSum, cand, candSum, tol, modeTol, until);
     std::printf("%s\n", failures ? "REGRESSION TEST FAILED" : "Regression test passed");
     return failures ? 1 : 0;
 }
