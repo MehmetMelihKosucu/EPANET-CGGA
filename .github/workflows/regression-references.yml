@@ -7,6 +7,8 @@ name: regression-references
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ regression-tests ]
 
 permissions:
   contents: write
