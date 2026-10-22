@@ -7,11 +7,6 @@ name: regression-references
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ regression-tests ]
-
-permissions:
-  contents: write
 
 jobs:
   windows:
@@ -36,16 +31,3 @@ jobs:
           path: tests/regression/reference/*.csv
           if-no-files-found: error
 
-      # Temporary: commit the regenerated reference files to the branch.
-      - name: Commit reference files
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tests/regression/reference/*.csv
-          if git diff --cached --quiet; then
-            echo "Reference files unchanged."
-          else
-            git commit -m "Update regression reference files (unsteady friction off; windows-latest, MSVC, x64, Release)"
-            git push
-          fi
