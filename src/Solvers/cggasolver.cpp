@@ -25,6 +25,8 @@
 #include <limits>
 #include <algorithm>
 #include <numeric>  // Required for std::accumulate
+#include <cstdio>
+#include <cstdlib>
 #include "sparspak.h"
 #include "Models/demandmodel.h"
 #include "sparspaksolver.h"
@@ -110,6 +112,22 @@ CGGASolver::CGGASolver(Network* nw, MatrixSolver* ms) : HydSolver(nw, ms),
     else if (network->option(Options::STEP_SIZING) == "ARF")
         stepSizing = ARF;
     else stepSizing = FULL;
+
+    // Optional overrides for batch runs, without recompiling:
+    //   CGGA_THRESHOLDS        = "phiA_D,phiR_D,phiA_I,phiR_I"
+    //   CGGA_UNSTEADY_FRICTION = 1 (switches the unsteady friction term on)
+    if (const char* s = std::getenv("CGGA_THRESHOLDS")) {
+        double a = 0, b = 0, c = 0, d = 0;
+        if (std::sscanf(s, "%lf,%lf,%lf,%lf", &a, &b, &c, &d) == 4 && a > 0 && b > 0 && c > 0 && d > 0) {
+            phiA_D = a; phiR_D = b; phiA_I = c; phiR_I = d;
+        }
+    }
+    if (const char* s = std::getenv("CGGA_UNSTEADY_FRICTION")) {
+        Pipe::unsteadyFriction = (std::atoi(s) != 0);
+    }
+    std::cerr << "[CGGA] thresholds phiA_D=" << phiA_D << " phiR_D=" << phiR_D
+              << " phiA_I=" << phiA_I << " phiR_I=" << phiR_I
+              << "; unsteady friction " << (Pipe::unsteadyFriction ? "on" : "off") << "\n";
 
     // Log initialization (optional)
     std::cout << "CGGASolver initialized with "

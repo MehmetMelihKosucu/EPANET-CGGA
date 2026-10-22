@@ -129,6 +129,25 @@ The dynamic thresholds must exceed the inertial ones. Per-mode time steps are
 the compile-time constants `Delta_WH` (0.01 s), `Delta_RWC` (1.0 s) and
 `Delta_QS` (10.0 s) in the same header.
 
+The thresholds can also be set at run time, without recompiling, with the
+environment variable `CGGA_THRESHOLDS` (order: φ_A,D, φ_R,D, φ_A,I, φ_R,I):
+
+```bat
+set CGGA_THRESHOLDS=0.5,0.02,0.25,0.01
+run-epanet3.exe Networks/EPA3-Nault2016.inp output.rpt
+```
+
+### Friction
+
+Friction is represented by the quasi-steady Darcy-Weisbach term, with the
+friction factor evaluated from the instantaneous flow. The unsteady friction
+term of the instantaneous acceleration-based model is implemented but switched
+off by default, so that the results can be compared with water hammer solvers
+that use quasi-steady friction (for example, the quasi-steady friction method
+of Bentley HAMMER, which was used for the reference solutions of the paper).
+It is switched on with `CGGA_UNSTEADY_FRICTION=1`; the decay coefficient is
+then the Vardy-Brown value k = √C*/2.
+
 ### Output
 
 Alongside the standard EPANET report, the solver writes an unsteadiness

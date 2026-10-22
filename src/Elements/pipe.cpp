@@ -258,28 +258,32 @@ void Pipe::validateStatus(Network* nw, double qTol)
     }
 }
 
+// Unsteady friction is off by default. The reference solutions used for
+// validation (Bentley HAMMER, quasi-steady friction method) contain no
+// unsteady friction term, so it must also be absent here for a like-for-like
+// comparison. It can be switched on with the environment variable
+// CGGA_UNSTEADY_FRICTION=1 (read once by the CGGA solver at start-up).
+bool Pipe::unsteadyFriction = false;
+
 double Pipe::computeShearDecayCoeff(double flow) const {
+    if (!unsteadyFriction) return 0.0;
+
     const double D = diameter;
     const double A = PI * D * D / 4.0;
     const double nu = 1.08e-5;  // Kinematic viscosity (ft²/s)
 
     double Re = fabs(flow) * D / (A * nu);
 
-    // Minimum effective value to ensure some damping always occurs
-    const double k_min = 0.00000001; // 0.06;
-
+    // Vardy-Brown shear decay coefficient C* and the corresponding
+    // Brunone coefficient k = sqrt(C*) / 2 (no empirical multiplier).
+    double C_star;
     if (Re < 2300) {
-        // Laminar flow: theoretical value is reasonable
-        double C_star = 4.76e-3;
-        return std::max(sqrt(C_star), k_min);  // ≈ 0.069
+        C_star = 4.76e-3;                                            // laminar
     }
     else {
-        // Turbulent flow: use empirical multiplier on theoretical value
-        // The factor of 3.0 accounts for real-world effects not in theory
-        double C_star = 7.41 * pow(Re, -log10(14.3 * pow(Re, -0.05)));
-        double k_theoretical = sqrt(C_star);
-        return std::max(3.0 * k_theoretical, k_min);
+        C_star = 7.41 * pow(Re, -log10(14.3 * pow(Re, -0.05)));     // turbulent
     }
+    return 0.5 * sqrt(C_star);
 }
 
 /*double Pipe::getWaveSpeed() const {
