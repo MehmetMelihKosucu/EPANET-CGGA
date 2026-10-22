@@ -16,9 +16,22 @@ jobs:
         run: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v4
+      - name: CPU
+        shell: pwsh
+        run: |
+          $c = Get-CimInstance Win32_Processor | Select-Object -First 1
+          echo "::notice title=CPU::$($c.Name) | cores $($c.NumberOfCores)"
       - name: Configure
         run: cmake -B build -A x64
       - name: Build
         run: cmake --build build --config Release
       - name: Regression tests
-        run: ctest --test-dir build -C Release -L regression --output-on-failure
+        shell: bash
+        run: |
+          set +e
+          ctest --test-dir build -C Release -L regression --output-on-failure --timeout 900 > ctest.log 2>&1
+          rc=$?
+          grep -E "Regression test:|modes:|FAIL|Passed|Failed|Timeout|\*\*\*" ctest.log | grep -v "Trial" | head -60 | while IFS= read -r line; do
+            echo "::notice title=ctest::$line"
+          done
+          exit $rc
