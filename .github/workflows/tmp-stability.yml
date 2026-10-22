@@ -1,0 +1,24 @@
+name: tmp-stability
+
+# Temporary: runs the regression tests on several runners in parallel to
+# check that the comparison is stable across machines. Removed before merge.
+
+on:
+  push:
+    branches: [ regression-tests ]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -B build -A x64
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Regression tests
+        run: ctest --test-dir build -C Release -L regression --output-on-failure
