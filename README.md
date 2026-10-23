@@ -187,6 +187,10 @@ accompanying paper.
 | EPANET 3 native integration | ✅ | wraps EPANET externally | wraps EPANET externally | manual | import path |
 | Cost to user | Free | Free | Free | Free (registration required) | License fee |
 
+## Versions
+
+The changes between releases are listed in [CHANGELOG.md](CHANGELOG.md). Each GitHub release is archived at Zenodo with its own DOI.
+
 ## Citation
 
 **Software**:
@@ -197,8 +201,7 @@ accompanying paper.
   title     = {EPANET-CGGA: Adaptive Hybrid Hydraulic Solver},
   year      = {2026},
   publisher = {Zenodo},
-  version   = {v1.0.0},
-  doi       = {10.5281/zenodo.20199101},
+  version   = {v1.1.0},
   url       = {https://github.com/MehmetMelihKosucu/EPANET-CGGA}
 }
 ```
