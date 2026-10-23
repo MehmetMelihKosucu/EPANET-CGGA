@@ -1,4 +1,4 @@
-/* EPANET 3.1.1 Pressure Management Extension
+/* EPANET 3.1
  *
  * Copyright (c) 2016 Open Water Analytics
  * Distributed under the MIT License (see the LICENSE file for details).
@@ -38,11 +38,15 @@
 #include <cmath>
 #include <limits>
 #include <iostream>   //for debugging
-#include <iomanip>
 #include <algorithm>
-#include <string>
 #include <time.h>
-
+#include <cctype>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <string>
+#include <vector>
 
 
 using namespace Epanet;
@@ -60,6 +64,82 @@ int EN_getVersion(int* version)
     return 0;
 }
 
+namespace {
+
+    struct ResultPreset {
+        const char* key;     // .inp adinda aranan kelime (kucuk harf)
+        const char* nodes;   // virgulle ayrilmis dugum kimlikleri
+    };
+
+    // Sira onemli: dugum varligina gore secimde daha ozel aglar once denenir.
+    const ResultPreset RESULT_PRESETS[] = {
+        { "hk-burst",  "612,3234" },
+        { "nault2018", "J71,J70,J874" },
+        { "nault2016", "J36,J35,J16,J24" },
+        { "tnet1",     "N2,N3,N4,N5,N6,N7,N8" },
+        { "onizuka",   "J1,J2,J3,J4,J5,J6,T1" },
+        { "rpv",       "2,3" },
+    };
+
+    std::vector<std::string> splitCsv(const std::string& s) {
+        std::vector<std::string> out;
+        std::stringstream ss(s);
+        std::string item;
+        while (std::getline(ss, item, ',')) {
+            std::size_t b = item.find_first_not_of(" \t\r\n");
+            std::size_t e = item.find_last_not_of(" \t\r\n");
+            if (b != std::string::npos) out.push_back(item.substr(b, e - b + 1));
+        }
+        return out;
+    }
+
+    std::string toLower(std::string s) {
+        for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return s;
+    }
+
+    // EN_getNodeIndex char* bekleyebilecegi icin degistirilebilir bir kopya verilir.
+    bool findNode(Epanet::Project& p, const std::string& id, int& index) {
+        std::string name = id;
+        index = -1;
+        return !name.empty() && EN_getNodeIndex(&name[0], &index, &p) == 0;
+    }
+
+    std::vector<std::string> chooseResultNodes(Epanet::Project& p, const std::string& inpStem,
+        std::string& source) {
+#ifdef _MSC_VER
+#pragma warning(suppress : 4996)
+#endif
+        const char* env = std::getenv("CGGA_RESULT_NODES");
+        if (env && *env) {
+            source = "CGGA_RESULT_NODES";
+            return splitCsv(env);
+        }
+        const std::string stem = toLower(inpStem);
+        for (const ResultPreset& r : RESULT_PRESETS) {
+            if (stem.find(r.key) != std::string::npos) {
+                source = std::string(r.key) + ", dosya adindan";
+                return splitCsv(r.nodes);
+            }
+        }
+        for (const ResultPreset& r : RESULT_PRESETS) {
+            std::vector<std::string> names = splitCsv(r.nodes);
+            bool all = true;
+            int idx;
+            for (const std::string& n : names) {
+                if (!findNode(p, n, idx)) { all = false; break; }
+            }
+            if (all) {
+                source = std::string(r.key) + ", dugumlerden";
+                return names;
+            }
+        }
+        source = "taninmadi";
+        return std::vector<std::string>();
+    }
+
+} // namespace
+
 //-----------------------------------------------------------------------------
 
 int EN_runEpanet(const char* inpFile, const char* rptFile, const char* outFile) {
@@ -68,28 +148,34 @@ int EN_runEpanet(const char* inpFile, const char* rptFile, const char* outFile) 
     Epanet::Project p;
     int err = 0;
 
-    // Open result file
-    std::ofstream hadilan("C:\\EPANET-CGGA\\Networks\\Results-Onizuka1986.txt");
+    // ------------------------------------------------------------------
+    // Sonuc dosyasi: .inp ile ayni klasorde, "Results-<inp adi>.txt"
+    // ------------------------------------------------------------------
+    const std::string inpPath(inpFile);
+    const std::size_t slash = inpPath.find_last_of("\\/");
+    const std::string folder = (slash == std::string::npos) ? "" : inpPath.substr(0, slash + 1);
+    std::string stem = (slash == std::string::npos) ? inpPath : inpPath.substr(slash + 1);
+    const std::size_t dot = stem.find_last_of('.');
+    if (dot != std::string::npos) stem = stem.substr(0, dot);
+    const std::string resultsPath = folder + "Results-" + stem + ".txt";
 
-    //std::ofstream hadilan("C:\\EPANET-CGGA\\Networks\\Results-Nault2018.txt");
-    
+    std::ofstream hadilan(resultsPath);
     if (!hadilan.is_open()) {
-        std::cerr << "Error: Could not open Results.txt for writing\n";
-        //return ERROR_OPENING_FILE;
+        std::cerr << "Error: Could not open " << resultsPath << " for writing\n";
     }
 
-    int IndexJ1, IndexJ2, IndexJ3, IndexJ4, IndexJ5, IndexJ6, IndexT1;
-    double headJ1, headJ2, headJ3, headJ4, headJ5, headJ6, headT1;
+    // Zaman bicimi: varsayilan s:dd:ss.sss; CGGA_TIME_FORMAT=s ise saniye.
+#ifdef _MSC_VER
+#pragma warning(suppress : 4996)
+#endif
+    const char* timeEnv = std::getenv("CGGA_TIME_FORMAT");
+    const bool timeInSeconds = timeEnv && toLower(timeEnv) == "s";
 
-    int IndexJ71, IndexJ70, IndexJ874;
-    double headJ71, headJ70, headJ874;
-
-	hadilan << "Time" << "\t\t" << "Head_J1_(m)" << "\t\t" << "Head_J2_(m)" << "\t\t" << "Head_J3_(m)" << "\t\t" << "Head_J4_(m)" << "\t\t" << "Head_J5_(m)" << "\t\t" << "Head_J6_(m)" << "\t\t" << "Head_T1_(m)" << "\n";
-
-    //hadilan << "Time" << "\t\t" << "Head_J71_(m)" << "\t\t" << "Head_J70_(m)" << "\t\t" << "Head_J874_(m)" << "\n";
+    std::vector<std::string> outNames;   // sonuc dosyasina yazilan dugumler
+    std::vector<int> outIndex;
 
     clock_t start_t = clock();
-    
+
     double T_end = p.getTotalSimulationTime(); // Total simulation time
 
     for (;;)
@@ -101,162 +187,87 @@ int EN_runEpanet(const char* inpFile, const char* rptFile, const char* outFile) 
         if ((err = p.openOutput(outFile))) break;
         p.writeSummary();
 
+        // ... yazilacak dugumleri sec, indekslerini bir kez bul, basligi yaz
+        std::string source;
+        for (const std::string& n : chooseResultNodes(p, stem, source)) {
+            int idx;
+            if (findNode(p, n, idx)) {
+                outNames.push_back(n);
+                outIndex.push_back(idx);
+            }
+            else {
+                std::cerr << "[CGGA] result node not found: " << n << "\n";
+            }
+        }
+        std::cerr << "[CGGA] result nodes = ";
+        for (std::size_t k = 0; k < outNames.size(); ++k) std::cerr << (k ? "," : "") << outNames[k];
+        std::cerr << "  (" << source << ")\n";
+        std::cerr << "[CGGA] results file = " << resultsPath << "\n";
+
+        hadilan << "Time";
+        for (const std::string& n : outNames) hadilan << "\t\tHead_" << n << "_(m)";
+        hadilan << "\n";
+
         // ... step through each time period
         double t = 0;
         double tstep = 0;
-        
+
         // Adaptive time steps
-        double Delta_WH = 0.05, Delta_RWC = 1, Delta_QS = 10.0;
+        double Delta_WH = 0.05, Delta_RWC = 1, Delta_QS = 5.0;
         tstep = Delta_QS;
-		if (p.getHydraulicSolverType() == 2) 
+        if (p.getHydraulicSolverType() == 2)
             tstep = Delta_WH;
-		else if (p.getHydraulicSolverType() == 1)
-			tstep = Delta_RWC;
-		else 
+        else if (p.getHydraulicSolverType() == 1)
+            tstep = Delta_RWC;
+        else
             tstep = Delta_QS;
-        Epanet::Project::SolverMode currentMode= Epanet::Project::QUASI_STEADY;
-    
+        Epanet::Project::SolverMode currentMode = Epanet::Project::QUASI_STEADY;
+
         // ... initialize the solver
         std::cout << "\n    Initializing solver ...";
         if ((err = p.initSolver(false))) break;
         std::cout << "\n    ";
 
         do {
-            std::cout << "\r    Solving network at "                     //r
+            std::cout << "\r    Solving network at "
                 << Utilities::getTime(static_cast<double>(t + tstep)) << " hrs ...        ";
             if (p.getHydraulicSolverType() == 2) { // This is CGGA
-          
-                // (C) run the solver for the current time step
-                //     We'll store the new time in t
-                //     This function might do the assembly & solving for the active network
                 err = p.runSolver(&t);
                 if (err) break;
-
-                // (F) Advance solver so it can handle internal increments
-                //     (for Water Hammer, it might do small sub-steps behind the scenes)
                 if (!err) err = p.advanceSolver(&tstep);
                 if (err) break;
 
-                int ErrorJ1 = EN_getNodeIndex("J1", &IndexJ1, &p);
-                int ErrorJ2 = EN_getNodeIndex("J2", &IndexJ2, &p);
-                int ErrorJ3 = EN_getNodeIndex("J3", &IndexJ3, &p);
-                int ErrorJ4 = EN_getNodeIndex("J4", &IndexJ4, &p);
-                int ErrorJ5 = EN_getNodeIndex("J5", &IndexJ5, &p);
-                int ErrorJ6 = EN_getNodeIndex("J6", &IndexJ6, &p);
-                int ErrorT1 = EN_getNodeIndex("T1", &IndexT1, &p);
-
-                double ErrorValJ1 = EN_getNodeValue(IndexJ1, EN_HEAD, &headJ1, &p);
-                double ErrorValJ2 = EN_getNodeValue(IndexJ2, EN_HEAD, &headJ2, &p);
-                double ErrorValJ3 = EN_getNodeValue(IndexJ3, EN_HEAD, &headJ3, &p);
-                double ErrorValJ4 = EN_getNodeValue(IndexJ4, EN_HEAD, &headJ4, &p);
-                double ErrorValJ5 = EN_getNodeValue(IndexJ5, EN_HEAD, &headJ5, &p);
-                double ErrorValJ6 = EN_getNodeValue(IndexJ6, EN_HEAD, &headJ6, &p);
-                double ErrorValT1 = EN_getNodeValue(IndexT1, EN_HEAD, &headT1, &p); // */
-
-                /*int ErrorJ71 = EN_getNodeIndex("J71", &IndexJ71, &p);
-                int ErrorJ70 = EN_getNodeIndex("J70", &IndexJ70, &p);
-                int ErrorJ874 = EN_getNodeIndex("J874", &IndexJ874, &p);
-
-                double ErrorValJ71 = EN_getNodeValue(IndexJ71, EN_HEAD, &headJ71, &p);
-                double ErrorValJ70 = EN_getNodeValue(IndexJ70, EN_HEAD, &headJ70, &p);
-                double ErrorValJ874 = EN_getNodeValue(IndexJ874, EN_HEAD, &headJ874, &p); // */
-
-                // (G) Output results if desired
-                //hadilan << Utilities::getTime(t) << "\t\t" << headJ71 << "\t\t" << headJ70 << "\t\t" << headJ874 << "\n"; 
-                hadilan << Utilities::getTime(t) << "\t\t" << headJ1 << "\t\t" << headJ2 << "\t\t" << headJ3 << "\t\t" << headJ4 << "\t\t" << headJ5 << "\t\t" << headJ6 << "\t\t" << headT1 << "\n";
+                if (timeInSeconds) hadilan << t;
+                else               hadilan << Utilities::getTime(t);
+                for (std::size_t k = 0; k < outIndex.size(); ++k) {
+                    double h = 0.0;
+                    EN_getNodeValue(outIndex[k], EN_HEAD, &h, &p);
+                    hadilan << "\t\t" << h;
+                }
+                hadilan << "\n";
                 hadilan.flush();
-			}
-			else if (p.getHydraulicSolverType() == 1) { // This is RWC GGA
-				err = p.runSolver(&t);
-				if (err) break;
-
-                // Advance solver
-                if (!err) err = p.advanceSolver(&tstep);
-
-                int ErrorJ1 = EN_getNodeIndex("J1", &IndexJ1, &p);
-                int ErrorJ2 = EN_getNodeIndex("J2", &IndexJ2, &p);
-                int ErrorJ3 = EN_getNodeIndex("J3", &IndexJ3, &p);
-                int ErrorJ4 = EN_getNodeIndex("J4", &IndexJ4, &p);
-                int ErrorJ5 = EN_getNodeIndex("J5", &IndexJ5, &p);
-                int ErrorJ6 = EN_getNodeIndex("J6", &IndexJ6, &p);
-                int ErrorT1 = EN_getNodeIndex("T1", &IndexT1, &p);
-
-                double ErrorValJ1 = EN_getNodeValue(IndexJ1, EN_HEAD, &headJ1, &p);
-                double ErrorValJ2 = EN_getNodeValue(IndexJ2, EN_HEAD, &headJ2, &p);
-                double ErrorValJ3 = EN_getNodeValue(IndexJ3, EN_HEAD, &headJ3, &p);
-                double ErrorValJ4 = EN_getNodeValue(IndexJ4, EN_HEAD, &headJ4, &p);
-                double ErrorValJ5 = EN_getNodeValue(IndexJ5, EN_HEAD, &headJ5, &p);
-                double ErrorValJ6 = EN_getNodeValue(IndexJ6, EN_HEAD, &headJ6, &p);
-                double ErrorValT1 = EN_getNodeValue(IndexT1, EN_HEAD, &headT1, &p); // */
-
-                /*int ErrorJ71 = EN_getNodeIndex("J71", &IndexJ71, &p);
-                int ErrorJ70 = EN_getNodeIndex("J70", &IndexJ70, &p);
-                int ErrorJ874 = EN_getNodeIndex("J874", &IndexJ874, &p);
-
-                double ErrorValJ71 = EN_getNodeValue(IndexJ71, EN_HEAD, &headJ71, &p);
-                double ErrorValJ70 = EN_getNodeValue(IndexJ70, EN_HEAD, &headJ70, &p);
-                double ErrorValJ874 = EN_getNodeValue(IndexJ874, EN_HEAD, &headJ874, &p); // */
-
-                // (G) Output results if desired
-                //hadilan << Utilities::getTime(t) << "\t\t" << headJ71 << "\t\t" << headJ70 << "\t\t" << headJ874 << "\n"; 
-                hadilan << Utilities::getTime(t) << "\t\t" << headJ1 << "\t\t" << headJ2 << "\t\t" << headJ3 << "\t\t" << headJ4 << "\t\t" << headJ5 << "\t\t" << headJ6 << "\t\t" << headT1 << "\n";
-                hadilan.flush();
-
+            }
+            else if (p.getHydraulicSolverType() == 1) { // This is RWC GGA
+                err = p.runSolver(&t);
                 if (err) break;
-				std::cout << "Time: " << t << " s\n";
-			}
-			else { // This is quasi-steady
-				err = p.runSolver(&t);
-				if (err) break;
-
-                // Advance solver
                 if (!err) err = p.advanceSolver(&tstep);
                 if (err) break;
-
-                int ErrorJ1 = EN_getNodeIndex("J1", &IndexJ1, &p);
-                int ErrorJ2 = EN_getNodeIndex("J2", &IndexJ2, &p);
-                int ErrorJ3 = EN_getNodeIndex("J3", &IndexJ3, &p);
-                int ErrorJ4 = EN_getNodeIndex("J4", &IndexJ4, &p);
-                int ErrorJ5 = EN_getNodeIndex("J5", &IndexJ5, &p);
-                int ErrorJ6 = EN_getNodeIndex("J6", &IndexJ6, &p);
-                int ErrorT1 = EN_getNodeIndex("T1", &IndexT1, &p);
-
-                double ErrorValJ1 = EN_getNodeValue(IndexJ1, EN_HEAD, &headJ1, &p);
-                double ErrorValJ2 = EN_getNodeValue(IndexJ2, EN_HEAD, &headJ2, &p);
-                double ErrorValJ3 = EN_getNodeValue(IndexJ3, EN_HEAD, &headJ3, &p);
-                double ErrorValJ4 = EN_getNodeValue(IndexJ4, EN_HEAD, &headJ4, &p);
-                double ErrorValJ5 = EN_getNodeValue(IndexJ5, EN_HEAD, &headJ5, &p);
-                double ErrorValJ6 = EN_getNodeValue(IndexJ6, EN_HEAD, &headJ6, &p);
-                double ErrorValT1 = EN_getNodeValue(IndexT1, EN_HEAD, &headT1, &p); // */
-
-                /*int ErrorJ71 = EN_getNodeIndex("J71", &IndexJ71, &p);
-                int ErrorJ70 = EN_getNodeIndex("J70", &IndexJ70, &p);
-                int ErrorJ874 = EN_getNodeIndex("J874", &IndexJ874, &p);
-
-                double ErrorValJ71 = EN_getNodeValue(IndexJ71, EN_HEAD, &headJ71, &p);
-                double ErrorValJ70 = EN_getNodeValue(IndexJ70, EN_HEAD, &headJ70, &p);
-                double ErrorValJ874 = EN_getNodeValue(IndexJ874, EN_HEAD, &headJ874, &p); // */
-
-                // (G) Output results if desired
-                //hadilan << Utilities::getTime(t) << "\t\t" <<  headJ71 << "\t\t" << headJ70 << "\t\t" << headJ874 << "\n"; 
-                hadilan << Utilities::getTime(t) << "\t\t" << headJ1 << "\t\t" << headJ2 << "\t\t" << headJ3 << "\t\t" << headJ4 << "\t\t" << headJ5 << "\t\t" << headJ6 << "\t\t" << headT1 << "\n";
-                hadilan.flush();
-
-			} 
-            
-            // Output results
-            //myfile << Utilities::getTime(t) << " " << Xm << "\n";
-
+                std::cout << "Time: " << t << " s\n";
+            }
+            else { // This is quasi-steady
+                err = p.runSolver(&t);
+                if (err) break;
+                if (!err) err = p.advanceSolver(&tstep);
+                if (err) break;
+            }
         } while (tstep > 0 && !err);
-        
+
         break;
     }
-    
 
     // ... simulation was successful
     if (!err)
     {
-        // ... report execution time
         clock_t end_t = clock();
         double cpu_t = ((double)(end_t - start_t)) / CLOCKS_PER_SEC;
         std::stringstream ss;
@@ -267,11 +278,10 @@ int EN_runEpanet(const char* inpFile, const char* rptFile, const char* outFile) 
         else ss << std::setprecision(3) << cpu_t << " sec.";
         p.writeMsg(ss.str());
 
-        // ... report simulation results
         std::cout << "\n    Writing report ...                           ";
         err = p.writeReport();
         std::cout << "\n    Simulation completed.                         \n";
-        std::cout << "\n... EPANET completed in " << ss.str() << "\n"; //
+        std::cout << "\n... EPANET completed in " << ss.str() << "\n";
     }
 
     if (err)

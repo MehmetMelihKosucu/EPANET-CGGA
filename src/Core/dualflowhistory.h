@@ -91,15 +91,7 @@ struct WaveAttenuationPoint {
 
 class DualFlowHistory {
 private:
-    // Fixed-size storage vectors (pre-allocated)
-    std::vector<double> timestamps;
-    std::vector<std::vector<double>> startFlowHistory;
-    std::vector<std::vector<double>> endFlowHistory;
-    std::vector<std::vector<double>> startHeadHistory;
-    std::vector<std::vector<double>> endHeadHistory;
-    std::vector<std::vector<double>> junctionHeadHistory;
-    std::vector<std::vector<WaveAttenuationPoint>> waveAttenuationHistory;
-
+    
     // Circular buffer management
     size_t capacity;      // Maximum number of entries
     size_t currentSize;   // Current number of valid entries
@@ -115,14 +107,23 @@ public:
     {
 
         // Pre-allocate all storage to avoid reallocations
-        timestamps.resize(capacity);
-        startFlowHistory.resize(capacity);
-        endFlowHistory.resize(capacity);
-        startHeadHistory.resize(capacity);
-        endHeadHistory.resize(capacity);
-        junctionHeadHistory.resize(capacity);
-        waveAttenuationHistory.resize(capacity);
+        timestamps.reserve(capacity);
+        startFlowHistory.reserve(capacity);
+        endFlowHistory.reserve(capacity);
+        startHeadHistory.reserve(capacity);
+        endHeadHistory.reserve(capacity);
+        junctionHeadHistory.reserve(capacity);
+        waveAttenuationHistory.reserve(capacity);
     }
+
+    // Fixed-size storage vectors (pre-allocated)
+    std::vector<double> timestamps;
+    std::vector<std::vector<double>> startFlowHistory;
+    std::vector<std::vector<double>> endFlowHistory;
+    std::vector<std::vector<double>> startHeadHistory;
+    std::vector<std::vector<double>> endHeadHistory;
+    std::vector<std::vector<double>> junctionHeadHistory;
+    std::vector<std::vector<WaveAttenuationPoint>> waveAttenuationHistory;
 
     // Copy constructor for compatibility
     DualFlowHistory(const DualFlowHistory& other) = default;
@@ -193,7 +194,7 @@ private:
         : currentSolverMode(0),
         lastModeChangeTime(0.0) {}
     std::map<Pipe*, std::unique_ptr<DualFlowHistory>> historyData;
-
+    std::set<Pipe*> prefillPending;
     int currentSolverMode;
 
     double lastModeChangeTime;

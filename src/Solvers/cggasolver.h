@@ -146,10 +146,10 @@ public:
     double previousTimestep;
 
     // Forced step counters (prevents cycling)
-    int forcedWHSteps;      // Current WH counter
-    int forcedWHSteps0;     // Initial WH counter value (e.g., 10)
-    int forcedRWCSteps;     // Current RWC counter
-    int forcedRWCSteps0;    // Initial RWC counter value (e.g., 5)
+    int forcedWHSteps = 0;  // Current WH counter
+    int forcedWHSteps0 = 0; // Minimum number of WH steps before de-escalation (0: none)
+    int forcedRWCSteps = 0; // Current RWC counter
+    int forcedRWCSteps0 = 0; // Minimum number of RWC steps before de-escalation (0: none)
 
     // Event tracking
     double eventStartTime;
