@@ -22,8 +22,8 @@ using namespace std;
 //-----------------------------------------------------------------------------
 Junction::Junction(std::string name_, NodeCategory category_)
     : Node(name_, category_ != NodeCategory::OTHER ? category_ : NodeCategory::IT1),
-    pMin(0.0),
-    pFull(0.0),
+    pMin(MISSING),
+    pFull(MISSING),
     emitter(nullptr),
     id(0), // Initialize id
     junctionData(0) // Initialize junctionData

@@ -69,7 +69,7 @@ void FlowHistoryManager::initializeHistory(
         // Fill history with CONSTANT steady-state values
         // No artificial variation - let the physics create real variation
         for (int t = 0; t < historyDepth; t++) {
-            double timestamp = historyStartTime + (t * timeStep);
+            double timestamp = currentTime - (historyDepth - 1 - t) * timeStep;
             history->timestamps.push_back(timestamp);
 
             // Use constant values - no artificial variation
@@ -81,6 +81,7 @@ void FlowHistoryManager::initializeHistory(
         }
 
         historyData[pipe] = std::move(history);
+        prefillPending.insert(pipe);
     }
 
     network->msgLog << "\n  Initialized " << historyData.size()
@@ -418,6 +419,7 @@ double FlowHistoryManager::linearInterpolate(double v1, double v2, double alpha)
 
 void FlowHistoryManager::clear() {
     historyData.clear();
+    prefillPending.clear();
 }
 
 bool FlowHistoryManager::hasHistoryForPipe(Pipe* pipe) const {
@@ -469,16 +471,28 @@ void FlowHistoryManager::updateHistoryForPipe(
     // === Access Existing History ===
     DualFlowHistory& history = *(historyIt->second);
 
-    actualTimeStep = 0.05;
+    if (prefillPending.erase(pipe) > 0) {
+        for (size_t i = 0; i < history.timestamps.size(); ++i) {
+            history.startFlowHistory[i] = startFlows;
+            history.endFlowHistory[i] = endFlows;
+            history.startHeadHistory[i] = startHeads;
+            history.endHeadHistory[i] = endHeads;
+        }
+        if (std::abs(history.timestamps.back() - currentTime) < 1e-9) return;
+    }
 
     // === Calculate Maximum History Length ===
     double waveSpeed = pipe->getWaveSpeed();
     double waveTime = pipe->length / waveSpeed;
 
-    // CRITICAL FIX: Use the actual timestep, not a hardcoded value
+    // Use a conservative timestep for buffer sizing: the smaller of the actual
+    // timestep and a typical WH timestep. This ensures the buffer can always
+    // accommodate WH-resolution data even during RWC-era recording.
+    double bufferDt = std::min(actualTimeStep, 0.05);
+
     // We need enough history to cover at least 2 wave travel times for safety
     size_t requiredLength = static_cast<size_t>(
-        std::ceil(2.0 * waveTime / actualTimeStep)  // 2x for safety margin
+        std::ceil(2.0 * waveTime / bufferDt)  // 2x for safety margin
         ) + 10;  // Additional buffer
 
     // Set reasonable bounds

@@ -164,6 +164,11 @@ class Pipe: public Link
     const std::vector<Segment>& getSegments() const { return segments; }
     double computeShearDecayCoeff(double flow) const;
 
+    // Unsteady friction (instantaneous acceleration-based model). When false
+    // (default), friction is represented by the quasi-steady Darcy-Weisbach
+    // term only and computeShearDecayCoeff() returns zero.
+    static bool unsteadyFriction;
+
     double getLength() const;
     bool _isSegment; // Boolean to indicate if this pipe is a segment.
 

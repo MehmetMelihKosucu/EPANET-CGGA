@@ -47,9 +47,10 @@ EPANET-CGGA/
 │   ├── Output/             # Report and binary output writers
 │   ├── Solvers/            # GGA, RWC-GGA and CGGA solvers
 │   └── Utilities/          # Support utilities
-├── tests/                  # Unit tests for the flow history subsystem
+├── tests/                  # Unit and regression tests
 │   ├── CMakeLists.txt
-│   └── test_flowhistory.cpp
+│   ├── test_flowhistory.cpp
+│   └── regression/         # Regression test program, reference results, README
 ├── CITATION.cff
 ├── CMakeLists.txt
 ├── LICENSE
@@ -74,19 +75,26 @@ The build produces the executable in `build/bin/Release/`.
 
 ## Tests
 
-The flow history subsystem is verified in isolation by a unit test suite
-under `tests/`. Build with testing enabled and run:
+Two kinds of tests are provided under `tests/`.
+
+**Unit tests** verify the flow history subsystem in isolation. They cover
+circular-buffer construction and capacity, the linear interpolation used on
+the reach-back path, per-pipe history registration, and the requirement that a
+reach-back query which cannot be satisfied from stored data reports failure
+rather than returning extrapolated values.
+
+**Regression tests** run complete simulations of the benchmark networks and
+compare the head series at the monitored nodes, the peak and minimum heads, and
+the QS/RWC/WH mode schedule with reference results stored in
+`tests/regression/reference/`. Details are given in
+[`tests/regression/README.md`](tests/regression/README.md).
 
 ```bash
 cd build
 ctest -C Release
 ```
 
-The suite covers circular-buffer construction and capacity, the linear
-interpolation used on the reach-back path, per-pipe history registration,
-and the requirement that a reach-back query which cannot be satisfied from
-stored data reports failure rather than returning extrapolated values.
-Tests run automatically on every commit via GitHub Actions.
+All tests run automatically on every commit via GitHub Actions.
 
 ## Quick Start
 
@@ -121,6 +129,25 @@ The dynamic thresholds must exceed the inertial ones. Per-mode time steps are
 the compile-time constants `Delta_WH` (0.01 s), `Delta_RWC` (1.0 s) and
 `Delta_QS` (10.0 s) in the same header.
 
+The thresholds can also be set at run time, without recompiling, with the
+environment variable `CGGA_THRESHOLDS` (order: φ_A,D, φ_R,D, φ_A,I, φ_R,I):
+
+```bat
+set CGGA_THRESHOLDS=0.5,0.02,0.25,0.01
+run-epanet3.exe Networks/EPA3-Nault2016.inp output.rpt
+```
+
+### Friction
+
+Friction is represented by the quasi-steady Darcy-Weisbach term, with the
+friction factor evaluated from the instantaneous flow. The unsteady friction
+term of the instantaneous acceleration-based model is implemented but switched
+off by default, so that the results can be compared with water hammer solvers
+that use quasi-steady friction (for example, the quasi-steady friction method
+of Bentley HAMMER, which was used for the reference solutions of the paper).
+It is switched on with `CGGA_UNSTEADY_FRICTION=1`; the decay coefficient is
+then the Vardy-Brown value k = √C*/2.
+
 ### Output
 
 Alongside the standard EPANET report, the solver writes an unsteadiness
@@ -139,8 +166,9 @@ reported in the accompanying paper, together with a classical reference case:
 | Network | Size | Transient event | Source |
 |---|---|---|---|
 | `Tnet1-EPA3.inp` | 7 junctions, 9 pipes, 1 reservoir, 1 valve | Valve closure at a network boundary (CCV on a 400 mm line) | Streeter & Wylie (1967) |
-| `Onizuka1986-EPA3.inp` | 6 junctions, 9 pipes, 3 reservoirs, 1 tank, 2 valves | Linear valve closure over 100 s, analysed at two tank diameters | Onizuka (1986) |
-| `EPA3-Nault2016.inp` | 34 junctions, 44 pipes, 3 reservoirs, 8 pumps, 1 valve | Pump shutoff and restart in a looped network | Nault & Karney (2016) |
+| `Onizuka1986-EPA3.inp` | 6 junctions, 9 pipes, 3 reservoirs, 1 tank (diameter 1 m), 2 valves | Linear valve closure over 100 s | Onizuka (1986) |
+| `Onizuka1986-EPA3-D10.inp` | Same network, tank diameter 10 m | Linear valve closure over 100 s | Onizuka (1986) |
+| `EPA3-Nault2016.inp` | 34 junctions, 44 pipes, 3 reservoirs, 8 pumps, 1 valve | Two pumps started at 30 s (one in each station), one pump shut off at 150 s | Network: Nault & Karney (2016); scenario: this study |
 | `EPA3-hk-burst.inp` | 212 junctions, 231 pipes, 2 reservoirs, 2 valves | Pipe burst at 03:30 within a 24 h extended-period simulation | Hadımköy WDS, Istanbul |
 
 The Hadımköy model includes pressure-dependent leakage. Pipes shorter than the
@@ -152,12 +180,16 @@ accompanying paper.
 
 | Feature | EPANET-CGGA | TSNet | PTSNet | ALLIEVI | Bentley HAMMER |
 |---|---|---|---|---|---|
-| License | MIT | MIT | MIT | Proprietary | Commercial |
-| Language | C++14 | Python | Python | Windows GUI | Windows GUI |
+| License | MIT | MIT | MIT | Proprietary (free license) | Commercial |
+| Code / interface | C++14 | Python | Python | Closed source (Windows GUI) | Closed source (Windows GUI) |
 | Algorithm family | Adaptive CGGA | MOC | MOC | MOC | MOC |
 | Adaptive QS/RWC/WH switching | ✅ | ❌ | ❌ | ❌ | ❌ |
 | EPANET 3 native integration | ✅ | wraps EPANET externally | wraps EPANET externally | manual | import path |
-| Cost to user | Free | Free | Free | License fee | License fee |
+| Cost to user | Free | Free | Free | Free (registration required) | License fee |
+
+## Versions
+
+The changes between releases are listed in [CHANGELOG.md](CHANGELOG.md). Each GitHub release is archived at Zenodo with its own DOI.
 
 ## Citation
 
@@ -169,8 +201,7 @@ accompanying paper.
   title     = {EPANET-CGGA: Adaptive Hybrid Hydraulic Solver},
   year      = {2026},
   publisher = {Zenodo},
-  version   = {v1.0.0},
-  doi       = {10.5281/zenodo.20199101},
+  version   = {v1.1.0},
   url       = {https://github.com/MehmetMelihKosucu/EPANET-CGGA}
 }
 ```
