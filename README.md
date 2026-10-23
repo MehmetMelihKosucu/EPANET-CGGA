@@ -7,7 +7,7 @@
 [![Language: C++](https://img.shields.io/badge/Language-C%2B%2B-blue.svg)](https://isocpp.org/)
 [![Build: CMake](https://img.shields.io/badge/Build-CMake-064F8C.svg)](https://cmake.org/)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6.svg)](#building)
-<!-- [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20199101.svg)](https://doi.org/10.5281/zenodo.20199101) -->
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23589234.svg)](https://doi.org/10.5281/zenodo.23589234)
 
 ---
 
@@ -189,7 +189,7 @@ accompanying paper.
 
 ## Versions
 
-The changes between releases are listed in [CHANGELOG.md](CHANGELOG.md). Each GitHub release is archived at Zenodo with its own DOI.
+The changes between releases are listed in [CHANGELOG.md](CHANGELOG.md). Each GitHub release is archived at Zenodo with its own DOI: v1.1.0 at [10.5281/zenodo.23589234](https://doi.org/10.5281/zenodo.23589234) and v1.0.0 at [10.5281/zenodo.20199101](https://doi.org/10.5281/zenodo.20199101).
 
 ## Citation
 
@@ -202,6 +202,7 @@ The changes between releases are listed in [CHANGELOG.md](CHANGELOG.md). Each Gi
   year      = {2026},
   publisher = {Zenodo},
   version   = {v1.1.0},
+  doi       = {10.5281/zenodo.23589234},
   url       = {https://github.com/MehmetMelihKosucu/EPANET-CGGA}
 }
 ```
